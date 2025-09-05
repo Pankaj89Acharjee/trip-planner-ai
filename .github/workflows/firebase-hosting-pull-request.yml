@@ -19,6 +19,7 @@ jobs:
           npm run build
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
+          node-version: 20
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HACKATHON_COMPETITION_2025 }}
           projectId: hackathon-competition-2025
