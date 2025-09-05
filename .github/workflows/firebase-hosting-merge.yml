@@ -22,7 +22,8 @@ jobs:
           channelId: live
           projectId: hackathon-competition-2025
           entryPoint: firebase-backend
-          
+
         #Firebase CLI needs webframeworks in Github Action to deploy NextJS Framework
         env:
           FIREBASE_CLI_EXPERIMENTS: webframeworks
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_HACKATHON_COMPETITION_2025 }}
