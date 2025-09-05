@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "hackathon-competition-2025"
+  },
+  "targets": {
+    "hackathon-competition-2025": {
+      "hosting": {
+        "default": [
+          "hackathon-competition-2025"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

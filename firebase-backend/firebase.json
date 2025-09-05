@@ -1,0 +1,29 @@
+{
+  "firestore": {
+    "database": "hackathon01",
+    "location": "asia-south2",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ]
+    }
+  ],
+  "hosting": {
+    "target": "default",
+    "source": "../frontend-tourplanner",
+    "frameworksBackend": {}
+  },
+  "storage": {
+    "rules": "storage.rules"
+  }
+}
