@@ -46,7 +46,7 @@ c76a032 Refactored UI
 - It was before the recent deployment triggers and workflow modifications
 - The commit message indicated it was a structural change rather than a bug fix
 
-### 4. Force Push to Remote Repository
+### 4. Force Push to Remote Repository after resolving Git Conflicts
 **Command**: `git push --force-with-lease origin main`
 **Purpose**: Update the remote GitHub repository to match the local reset state
 **Result**: Successfully force-pushed the changes to GitHub
