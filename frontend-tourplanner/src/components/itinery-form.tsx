@@ -15,6 +15,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Bike, Landmark, PartyPopper, Sparkles, MapPin, Utensils, ShoppingBag, Book } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { askAgent } from "@/lib/agentFunctionCall";
+import { ItineraryDisplay } from "./itinery-display";
 
 const interests = [
   { id: "heritage", label: "Heritage", icon: Landmark },
@@ -45,11 +47,7 @@ type ItineraryFormProps = {
   setError: (error: string | null) => void;
 };
 
-export function ItineraryForm({
-  setItinerary,
-  setIsLoading,
-  setError,
-}: ItineraryFormProps) {
+export function ItineraryForm({ setItinerary, setIsLoading, setError }: ItineraryFormProps) {
   const { toast } = useToast();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -65,17 +63,60 @@ export function ItineraryForm({
     setIsLoading(true);
     setError(null);
     setItinerary(null);
-
+    console.log("Values submitted", values);
     try {
-      const result = await generatePersonalizedItineraryAction({
-        ...values,
-        interests: values.interests as Array<"heritage" | "nightlife" | "adventure">,
-      });
 
-      if (!result || !result.itinerary || result.itinerary.length === 0) {
+      // UNCOMMENT LATER FOR THE BELOW Fx TO GET PERSONALIZED ITINERY
+
+      // const result = await generatePersonalizedItineraryAction({
+      //   ...values,
+      //   interests: values.interests as Array<"heritage" | "nightlife" | "adventure">,
+      // });
+
+      const result = await askAgent(JSON.stringify(values));
+
+      console.log("Receive Itenery from Agent", result.answer)
+      // if (!result || !result.itinerary || result.itinerary.length === 0) {
+      //   throw new Error("The AI could not generate an itinerary. Please try again with different options.");
+      // }
+
+
+
+      //Removing markdown if any at the beginning
+      let jsonString = result.answer;
+      if (jsonString?.includes('```json')) {
+        jsonString = jsonString.replace(/```json\s*/, '').replace(/\s*```/, '');
+      } else if (jsonString?.includes('```')) {
+        jsonString = jsonString.replace(/```\s*/, '').replace(/\s*```/, '');
+      }
+
+
+
+      if (!result || !result.answer) {
         throw new Error("The AI could not generate an itinerary. Please try again with different options.");
       }
-      setItinerary(result);
+
+      //Parsing the Itinerydata
+      let itineraryData
+      try {
+        itineraryData = JSON.parse(jsonString || '{}');
+      } catch (error) {
+        console.error('JSON Parse Error:', error);
+        console.error('Raw response:', result.answer);
+        throw new Error("Invalid itinerary format received from AI.");
+      }
+
+
+      // Validate the structure
+      if (!itineraryData.itinerary || !itineraryData.totalCost) {
+        throw new Error("Invalid itinerary format received from AI.");
+      }
+
+      // Set loading to false first, then set itinerary
+      setIsLoading(false);
+      setItinerary(itineraryData);
+
+
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : "An unknown error occurred.";
@@ -85,7 +126,6 @@ export function ItineraryForm({
         title: "Generation Failed",
         description: errorMessage,
       });
-    } finally {
       setIsLoading(false);
     }
   }
@@ -123,7 +163,7 @@ export function ItineraryForm({
                   <FormControl>
                     <div>
                       <div className="text-2xl font-bold text-primary mb-2 text-purple-500/90">
-                      ₹{field.value.toLocaleString()}
+                        ₹{field.value.toLocaleString()}
                       </div>
                       <Slider
                         min={100}
@@ -153,16 +193,15 @@ export function ItineraryForm({
                       const Icon = item.icon;
                       return (
                         <FormItem key={item.id} className="w-full h-full">
-                          <div 
-                            className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 h-full hover:shadow-md ${
-                              field.value?.includes(item.id) 
-                                ? 'border-purple-500 bg-purple-800/20 text-white shadow-lg' 
-                                : 'border-gray-300 bg-gray-800 hover:border-purple-300 hover:bg-gray-700/90 text-gray-400'
-                            }`}
+                          <div
+                            className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 h-full hover:shadow-md ${field.value?.includes(item.id)
+                              ? 'border-purple-500 bg-purple-800/20 text-white shadow-lg'
+                              : 'border-gray-300 bg-gray-800 hover:border-purple-300 hover:bg-gray-700/90 text-gray-400'
+                              }`}
                             onClick={() => {
                               const currentValues = field.value || [];
                               const isSelected = currentValues.includes(item.id);
-                              
+
                               if (isSelected) {
                                 // Remove item
                                 field.onChange(currentValues.filter((value) => value !== item.id));
@@ -172,12 +211,10 @@ export function ItineraryForm({
                               }
                             }}
                           >
-                            <Icon className={`w-8 h-8 mb-2 transition-colors ${
-                              field.value?.includes(item.id) ? 'text-white' : 'text-purple-500/90'
-                            }`} />
-                            <span className={`font-semibold transition-colors ${
-                              field.value?.includes(item.id) ? 'text-white' : 'text-gray-400'
-                            }`}>{item.label}</span>
+                            <Icon className={`w-8 h-8 mb-2 transition-colors ${field.value?.includes(item.id) ? 'text-white' : 'text-purple-500/90'
+                              }`} />
+                            <span className={`font-semibold transition-colors ${field.value?.includes(item.id) ? 'text-white' : 'text-gray-400'
+                              }`}>{item.label}</span>
                           </div>
                         </FormItem>
                       );
@@ -222,6 +259,10 @@ export function ItineraryForm({
             </Button>
           </form>
         </Form>
+
+        {/* Displaying the Contentsm when Data received from the MCP server through the Agent */}
+
+
       </CardContent>
     </Card>
   );

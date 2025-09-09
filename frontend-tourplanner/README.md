@@ -16,6 +16,32 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Agent (Firebase Functions) Integration
+
+Simple setup to call your deployed Firebase function directly:
+
+1) Add your Firebase function URL to `.env.local`:
+
+```
+NEXT_PUBLIC_AGENT_URL=https://<region>-<project>.cloudfunctions.net/agentAPI
+```
+
+2) Use the helper function anywhere in your app:
+
+```ts
+import { askAgent } from "@/lib/agent";
+
+const { answer, error } = await askAgent("Find hotels in Zurich under $150 per night");
+if (error) {
+  console.error(error);
+} else {
+  console.log(answer);
+}
+```
+
+That's it! No complex API routes or server setup needed.
+
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.

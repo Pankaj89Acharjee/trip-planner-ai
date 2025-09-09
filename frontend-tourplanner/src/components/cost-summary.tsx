@@ -32,9 +32,9 @@ export function CostSummary({ totalCost, itinerary }: CostSummaryProps) {
       if (day.accommodation) {
         accommodation += day.accommodation.costPerNight;
       }
-      if (day.transportation) {
-        transportation += day.transportation.cost;
-      }
+      // if (day.transportation) {
+      //   transportation += day.transportation.cost;
+      // }
       if (day.activities) {
         activities += day.activities.reduce((sum, act) => sum + act.cost, 0);
       }

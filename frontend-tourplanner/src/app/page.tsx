@@ -5,7 +5,7 @@ import type { FullItinerary, AdaptedItinerary } from "@/lib/interfaces";
 import { ItineraryForm } from "@/components/itinery-form";
 import { ItineraryDisplay } from "@/components/itinery-display";
 import { ItinerarySkeleton } from "@/components/itinery-skeleton";
-import AppSidebar from "@/components/sidebar";
+import { LayoutWrapper } from "@/components/layout-wrapper";
 
 export default function Home() {
   const [itinerary, setItinerary] = useState<FullItinerary | null>(null);
@@ -15,44 +15,51 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <>
-      {/* Sidebar */}
-      <AppSidebar />
-
-      {/* Main Content - Independent Scrolling */}
-      <div className="flex-1 overflow-y-auto bg-gradient-secondary">
-        <div className="container mx-auto p-4 md:p-8">
-          {!itinerary && !isLoading && (
-            <div className="max-w-2xl mx-auto">
-              <div className="text-center mb-12">
-                <h2 className="text-4xl font-bold tracking-tight text-primary sm:text-5xl text-purple-500/90">
-                  Plan Your Favourite Trip
-                </h2>
-                <p className="mt-4 text-lg leading-8 text-muted-foreground">
-                  Tell us your travel preferences and let our AI design a
-                  personalized itinerary for you.
-                </p>
-              </div>
-              <ItineraryForm
-                setItinerary={setItinerary}
-                setIsLoading={setIsLoading}
-                setError={setError}
-              />
+    <LayoutWrapper>
+      <div className="container mx-auto p-4 md:p-8">
+        {!itinerary && !isLoading && (
+          <div className="max-w-2xl mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-4xl font-bold tracking-tight text-primary sm:text-5xl dark:text-purple-500/90 text-gray-700 font-mono">
+                Plan Your Favourite Trip
+              </h2>
+              <p className="mt-4 text-lg leading-8 text-muted-foreground text-gray-500 dark:text-gray-300">
+                Tell us your travel preferences and let our AI design a
+                personalized itinerary for you.
+              </p>
             </div>
-          )}
-
-          {isLoading && <ItinerarySkeleton />}
-          {itinerary && (
-            <ItineraryDisplay
-              itinerary={itinerary}
+            <ItineraryForm
               setItinerary={setItinerary}
-              adaptedItinerary={adaptedItinerary}
-              setAdaptedItinerary={setAdaptedItinerary}
+              setIsLoading={setIsLoading}
+              setError={setError}
             />
-          )}
-          {/* Error handling is done via toasts, triggered from form components */}
-        </div>
+          </div>
+        )}
+
+        {isLoading && <ItinerarySkeleton />}
+        {error && (
+          <div className="max-w-2xl mx-auto">
+            <div className="text-center p-8 bg-red-50 border border-red-200 rounded-lg">
+              <h3 className="text-lg font-semibold text-red-800 mb-2">Error</h3>
+              <p className="text-red-600 mb-4">{error}</p>
+              <button 
+                onClick={() => setError(null)}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        )}
+        {itinerary && (
+          <ItineraryDisplay
+            itinerary={itinerary}
+            setItinerary={setItinerary}
+            adaptedItinerary={adaptedItinerary}
+            setAdaptedItinerary={setAdaptedItinerary}
+          />
+        )}
       </div>
-    </>
+    </LayoutWrapper>
   );
 }

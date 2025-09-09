@@ -141,7 +141,7 @@ const SidebarProvider = React.forwardRef<
               } as React.CSSProperties
             }
             className={cn(
-              "group/sidebar-wrapper flex min-h-svh w-full has-[[data-variant=inset]]:bg-sidebar",
+              "group/sidebar-wrapper flex min-h-svh w-full has-[[data-variant=inset]]:bg-sidebar dark:text-gray-300 text-gray-700",
               className
             )}
             ref={ref}
@@ -198,7 +198,7 @@ const Sidebar = React.forwardRef<
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
-            className="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+            className="w-[--sidebar-width] bg-gradient-primary p-0 text-sidebar-foreground [&>button]:hidden dark:text-gray-300 text-gray-700"
             style={
               {
                 "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
