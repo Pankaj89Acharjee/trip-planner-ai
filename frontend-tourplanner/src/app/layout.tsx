@@ -6,6 +6,7 @@ import Header from "@/components/header";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import AppSidebar from "@/components/sidebar";
 import { ThemeProvider } from "@/components/theme-provider";
+import { AuthProvider } from "@/contexts/AuthContext";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -51,14 +52,16 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <SidebarProvider>
-            <div className="h-screen bg-gradient-primary w-full flex flex-col overflow-hidden">
-              <Header />
-              <main className="flex-1 flex overflow-hidden">
-                {children}
-              </main>
-            </div>
-          </SidebarProvider>
+          <AuthProvider>
+            <SidebarProvider>
+              <div className="h-screen bg-gradient-primary w-full flex flex-col overflow-hidden">
+                <Header />
+                <main className="flex-1 flex overflow-hidden">
+                  {children}
+                </main>
+              </div>
+            </SidebarProvider>
+          </AuthProvider>
         </ThemeProvider>
         <Toaster />
       </body>
