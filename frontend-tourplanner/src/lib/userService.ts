@@ -30,10 +30,14 @@ export interface UpdateUserData {
 class UserService {
   // Get user from Firestore
   async getUser(uid: string): Promise<UserData | null> {
+    if (!db) {
+      console.warn('Firestore is not available');
+      return null;
+    }
     try {
       const userDocRef = doc(db, 'users', uid);
       const userDoc = await getDoc(userDocRef);
-      
+
       if (userDoc.exists()) {
         return userDoc.data() as UserData;
       }
@@ -46,6 +50,10 @@ class UserService {
 
   // Create user in Firestore
   async createUser(userData: UserData): Promise<UserData> {
+    if (!db) {
+      console.warn('Firestore is not available');
+      throw new Error('Firestore is not available');
+    }
     try {
       const userDocRef = doc(db, 'users', userData.uid);
       await setDoc(userDocRef, {
@@ -64,6 +72,10 @@ class UserService {
 
   // Update user profile in Firestore
   async updateUserProfile(uid: string, updateData: UpdateUserData): Promise<UserData> {
+    if (!db) {
+      console.warn('Firestore is not available');
+      throw new Error('Firestore is not available');
+    }
     try {
       const userDocRef = doc(db, 'users', uid);
       await updateDoc(userDocRef, {
@@ -82,6 +94,10 @@ class UserService {
 
   // Update last login time
   async updateLastLogin(uid: string): Promise<UserData> {
+    if (!db) {
+      console.warn('Firestore is not available');
+      throw new Error('Firestore is not available');
+    }
     try {
       const userDocRef = doc(db, 'users', uid);
       await updateDoc(userDocRef, {
@@ -100,6 +116,10 @@ class UserService {
 
   // Sync Firebase user with Firestore
   async syncUserWithFirestore(firebaseUser: any): Promise<UserData> {
+    if (!db) {
+      console.warn('Firestore is not available');
+      throw new Error('Firestore is not available');
+    }
     try {
       // First, try to get the user from Firestore
       let firestoreUser = await this.getUser(firebaseUser.uid);

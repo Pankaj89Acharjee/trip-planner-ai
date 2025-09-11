@@ -1,6 +1,6 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, enableNetwork, disableNetwork } from 'firebase/firestore';
+import { getFirestore, enableNetwork } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 
 const firebaseConfig = {
@@ -12,23 +12,53 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-console.log("Firebase Config:", {
-  projectId: firebaseConfig.projectId,
-  authDomain: firebaseConfig.authDomain,
-  apiKey: firebaseConfig.apiKey ? "Set" : "Missing"
-});
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Check if Firebase config is valid
+const isFirebaseConfigValid = () => {
+  return firebaseConfig.apiKey && 
+         firebaseConfig.authDomain && 
+         firebaseConfig.projectId &&
+         firebaseConfig.storageBucket &&
+         firebaseConfig.messagingSenderId &&
+         firebaseConfig.appId;
+};
 
-// Initialize Firebase services
-export const auth = getAuth(app);
-export const db = getFirestore(app, "hackathon01");
-export const functions = getFunctions(app);
+// Initialize Firebase only if config is valid
+let app: any = null;
+let auth: any = null;
+let db: any = null;
+let functions: any = null;
 
-// Enable network connectivity for Firestore
-enableNetwork(db).catch((error) => {
-  console.error('Error enabling Firestore network:', error);
-});
+if (isFirebaseConfigValid()) {
+  console.log("Firebase Config:", {
+    projectId: firebaseConfig.projectId,
+    authDomain: firebaseConfig.authDomain,
+    apiKey: firebaseConfig.apiKey ? "Set" : "Missing"
+  });
+  
+  try {
+    // Check if Firebase app already exists
+    app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    
+    // Initialize Firebase services
+    auth = getAuth(app);
+    db = getFirestore(app, "hackathon01");
+    functions = getFunctions(app);
 
+    // Enable network connectivity for Firestore
+    enableNetwork(db).catch((error) => {
+      console.error('Error enabling Firestore network:', error);
+    });
+  } catch (error) {
+    console.error('Firebase initialization error:', error);
+    // Set to null if initialization fails
+    app = null;
+    auth = null;
+    db = null;
+    functions = null;
+  }
+} else {
+  console.warn('Firebase config is incomplete, skipping initialization');
+}
 
+export { auth, db, functions };
 export default app;
