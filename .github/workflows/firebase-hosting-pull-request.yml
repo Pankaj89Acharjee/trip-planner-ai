@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Create .env file
       - run: |
           [ -z "$NEXT_PUBLIC_FIREBASE_API_KEY" ] && echo "API_KEY is not set" || echo "API_KEY is set"
           [ -z "$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN" ] && echo "AUTH_DOMAIN is not set" || echo "AUTH_DOMAIN is set"

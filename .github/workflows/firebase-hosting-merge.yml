@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Create .env file
       - run: |
           [ -z "$NEXT_PUBLIC_FIREBASE_API_KEY" ] && echo "API_KEY is not set" || echo "API_KEY is set"
           [ -z "$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN" ] && echo "AUTH_DOMAIN is not set" || echo "AUTH_DOMAIN is set"
@@ -18,14 +19,6 @@ jobs:
           [ -z "$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET" ] && echo "STORAGE_BUCKET is not set" || echo "STORAGE_BUCKET is set"
           [ -z "$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID" ] && echo "MESSAGING_SENDER_ID is not set" || echo "MESSAGING_SENDER_ID is set"
           [ -z "$NEXT_PUBLIC_FIREBASE_APP_ID" ] && echo "APP_ID is not set" || echo "APP_ID is set"
-
-
-          echo "API_KEY=$NEXT_PUBLIC_FIREBASE_API_KEY"
-          echo "AUTH_DOMAIN=$NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN"
-          echo "PROJECT_ID=$NEXT_PUBLIC_FIREBASE_PROJECT_ID"
-          echo "STORAGE_BUCKET=$NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET"
-          echo "MESSAGING_SENDER_ID=$NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID"
-          echo "APP_ID=$NEXT_PUBLIC_FIREBASE_APP_ID"
 
           cd frontend-tourplanner
           npm ci
