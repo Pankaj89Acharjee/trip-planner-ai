@@ -1,0 +1,231 @@
+sources:
+  my-cloud-sql-source:
+    kind: cloud-sql-postgres
+    project: hackathon-competition-2025
+    region: us-central1
+    instance: hoteldb-instance
+    database: postgres
+    user: postgres
+    password: "postgres"
+
+tools:
+  search-hotels-by-name:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Search for hotels based on name.
+    parameters:
+      - name: name
+        type: string
+        description: The name of the hotel.
+    statement: |
+      SELECT * 
+      FROM hachathonschema.hotels 
+      WHERE name ILIKE '%' || $1 || '%';
+
+  search-hotels-by-location:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Search for hotels based on location. Result is sorted by price from least to most expensive.
+    parameters:
+      - name: location
+        type: string
+        description: The location of the hotel.
+    statement: |
+      SELECT *
+      FROM hachathonschema.hotels
+      WHERE location ILIKE '%' || $1 || '%'
+      ORDER BY
+        CASE price_tier
+          WHEN 'Budget' THEN 1
+          WHEN 'Mid-range' THEN 2
+          WHEN 'Upper Upscale' THEN 3
+          WHEN 'Luxury' THEN 4
+          ELSE 99 -- Handle any unexpected values, place them at the end
+        END;
+
+  search-activities-by-city:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Search for activities in a specific city.
+    parameters:
+      - name: city
+        type: string
+        description: The city to search activities in.
+    statement: |
+      SELECT * 
+      FROM hachathonschema.activities 
+      WHERE city ILIKE '%' || $1 || '%' 
+      ORDER BY rating DESC;
+
+  search-activities-by-category:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Search for activities by category (heritage, nightlife, adventure, food, shopping, culture).
+    parameters:
+      - name: category
+        type: string
+        description: The activity category to search for.
+    statement: |
+      SELECT * 
+      FROM hachathonschema.activities 
+      WHERE category = $1 
+      ORDER BY rating DESC;
+
+  search-activities-by-city-and-category:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Search for activities in a specific city and category.
+    parameters:
+      - name: city
+        type: string
+        description: The city to search activities in.
+      - name: category
+        type: string
+        description: The activity category to search for.
+    statement: |
+      SELECT * 
+      FROM hachathonschema.activities 
+      WHERE city ILIKE '%' || $1 || '%' 
+        AND category = $2 
+      ORDER BY rating DESC;
+
+  search-activities-by-budget:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Search for activities within a specific budget range.
+    parameters:
+      - name: max_cost
+        type: integer
+        description: Maximum cost per activity.
+    statement: |
+      SELECT * 
+      FROM hachathonschema.activities 
+      WHERE cost <= $1 
+      ORDER BY cost ASC;
+
+  save-itinerary:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Save a generated itinerary to the database.
+    parameters:
+      - name: user_id
+        type: integer
+        description: The user ID (optional, can be null).
+      - name: destination
+        type: string
+        description: The travel destination.
+      - name: total_days
+        type: integer
+        description: Number of travel days.
+      - name: total_cost
+        type: integer
+        description: Total estimated cost.
+      - name: budget
+        type: integer
+        description: User's budget.
+      - name: preferences
+        type: string
+        description: User preferences as JSON string.
+      - name: itinerary_data
+        type: string
+        description: Complete itinerary as JSON string.
+    statement: |
+      INSERT INTO hachathonschema.user_itineraries 
+        (user_id, destination, total_days, total_cost, budget, preferences, itinerary_data)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id;
+
+  create-user:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Create a new user in the database.
+    parameters:
+      - name: uid
+        type: string
+        description: Firebase user ID.
+      - name: email
+        type: string
+        description: User email address.
+      - name: display_name
+        type: string
+        description: User display name.
+      - name: photo_url
+        type: string
+        description: User profile picture URL.
+      - name: preferences
+        type: string
+        description: User preferences as JSON string.
+    statement: |
+      INSERT INTO hachathonschema.users 
+        (uid, email, display_name, photo_url, preferences, created_at, updated_at, last_login_at)
+      VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT (uid) DO UPDATE SET
+        email = EXCLUDED.email,
+        display_name = EXCLUDED.display_name,
+        photo_url = EXCLUDED.photo_url,
+        preferences = EXCLUDED.preferences,
+        updated_at = CURRENT_TIMESTAMP,
+        last_login_at = CURRENT_TIMESTAMP
+      RETURNING id;
+
+  get-user:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Get user by Firebase UID.
+    parameters:
+      - name: uid
+        type: string
+        description: Firebase user ID.
+    statement: |
+      SELECT * FROM hachathonschema.users WHERE uid = $1;
+
+  update-user:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Update user information.
+    parameters:
+      - name: uid
+        type: string
+        description: Firebase user ID.
+      - name: email
+        type: string
+        description: User email address.
+      - name: display_name
+        type: string
+        description: User display name.
+      - name: photo_url
+        type: string
+        description: User profile picture URL.
+      - name: preferences
+        type: string
+        description: User preferences as JSON string.
+    statement: |
+      UPDATE hachathonschema.users 
+      SET email = $2, display_name = $3, photo_url = $4, preferences = $5, updated_at = CURRENT_TIMESTAMP
+      WHERE uid = $1
+      RETURNING id;
+
+  delete-user:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Delete user by Firebase UID.
+    parameters:
+      - name: uid
+        type: string
+        description: Firebase user ID.
+    statement: |
+      DELETE FROM hachathonschema.users WHERE uid = $1;
+
+toolsets:
+  my_first_toolset:
+    - search-hotels-by-name
+    - search-hotels-by-location
+    - search-activities-by-city
+    - search-activities-by-category
+    - search-activities-by-city-and-category
+    - search-activities-by-budget
+    - save-itinerary
+    - create-user
+    - get-user
+    - update-user
+    - delete-user

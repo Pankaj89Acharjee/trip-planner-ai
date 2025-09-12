@@ -1,0 +1,285 @@
+sources:
+  my-cloud-sql-source:
+    kind: cloud-sql-postgres
+    project: hackathon-competition-2025
+    region: us-central1
+    instance: hoteldb-instance
+    database: postgres
+    user: postgres
+    password: "postgres"
+
+tools:
+
+  # =====================================================
+  # MAIN HOTEL SERACH TOOLS
+  # =====================================================
+
+  search-hotels-by-location-and-activities:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Search for both hotels and activities in a specific location with filters
+    parameters:
+      - name: location_name
+        type: string
+        description: City or location name to search for
+      - name: max_budget
+        type: integer
+        description: Maximum budget filter (optional)
+      - name: interests
+        type: string
+        description: Comma-separated interests/categories (optional)
+    statement: |
+      -- Search hotels by location with budget filter
+      SELECT 'hotel' as type, 
+             h.id, h.name, h.location as city, h.cost_per_night, h.rating,
+             h.latitude, h.longitude, h.description, h.amenities,
+             h.room_type, h.max_occupancy, h.image_url, h.price_tier,
+             l.name as location_name, l.country, l.currency
+      FROM hachathonschema.hotels h
+      LEFT JOIN hachathonschema.locations l ON h.location_id = l.id
+      WHERE h.location ILIKE '%' || $1 || '%' 
+        AND h.is_active = true
+        AND ($2 IS NULL OR h.cost_per_night <= $2)
+      
+      UNION ALL
+      
+      -- Search activities by city with budget and category filters
+      SELECT 'activity' as type,
+             a.id, a.name, a.city, a.cost as cost_per_night, a.rating,
+             a.latitude, a.longitude, a.description, NULL as amenities,
+             a.category as room_type, a.duration_hours as max_occupancy, NULL as image_url, a.category as price_tier,
+             l.name as location_name, l.country, l.currency
+      FROM hachathonschema.activities a
+      LEFT JOIN hachathonschema.locations l ON a.location_id = l.id
+      WHERE a.city ILIKE '%' || $1 || '%' 
+        AND a.is_active = true
+        AND ($2 IS NULL OR a.cost <= $2)
+        AND ($3 IS NULL OR a.category = ANY(string_to_array($3, ',')))
+      
+      ORDER BY type, rating DESC;
+
+  # =====================================================
+  # ITINERARY MANAGEMENT TOOLS
+  # =====================================================
+  
+  save-itinerary:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Save a generated itinerary to the database
+    parameters:
+      - name: user_id
+        type: integer
+        description: The user ID (optional, can be null)
+      - name: title
+        type: string
+        description: Itinerary title
+      - name: destination
+        type: string
+        description: The travel destination
+      - name: total_days
+        type: integer
+        description: Number of travel days
+      - name: total_cost
+        type: integer
+        description: Total estimated cost
+      - name: budget
+        type: integer
+        description: User's budget
+      - name: preferences
+        type: string
+        description: User preferences as JSON string
+      - name: itinerary_data
+        type: string
+        description: Complete itinerary as JSON string
+      - name: travel_dates
+        type: string
+        description: Travel dates as JSON string (optional)
+    statement: |
+      INSERT INTO hachathonschema.user_itineraries 
+        (user_id, title, destination, total_days, total_cost, budget, preferences, itinerary_data, travel_dates, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'saved')
+      RETURNING *;
+
+  get-user-itineraries:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Get all itineraries for a specific user
+    parameters:
+      - name: user_id
+        type: integer
+        description: The user ID
+    statement: |
+      SELECT * FROM hachathonschema.user_itineraries 
+      WHERE user_id = $1 
+      ORDER BY created_at DESC;
+
+  # =====================================================
+  # BOOKING TOOLS
+  # =====================================================
+  
+  create-booking:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Create a new booking
+    parameters:
+      - name: user_id
+        type: integer
+        description: The user ID
+      - name: itinerary_id
+        type: integer
+        description: The itinerary ID (optional)
+      - name: booking_type
+        type: string
+        description: Type of booking (hotel, activity, package)
+      - name: item_id
+        type: integer
+        description: ID of the hotel or activity
+      - name: booking_date
+        type: string
+        description: Date of booking (YYYY-MM-DD)
+      - name: check_in_date
+        type: string
+        description: Check-in date (YYYY-MM-DD)
+      - name: check_out_date
+        type: string
+        description: Check-out date (YYYY-MM-DD)
+      - name: quantity
+        type: integer
+        description: Number of items/rooms
+      - name: unit_price
+        type: integer
+        description: Price per unit
+      - name: total_amount
+        type: integer
+        description: Total booking amount
+    statement: |
+      INSERT INTO hachathonschema.bookings 
+        (user_id, itinerary_id, booking_type, item_id, booking_reference, booking_date, 
+         check_in_date, check_out_date, quantity, unit_price, total_amount)
+      VALUES ($1, $2, $3, $4, 'BK-' || EXTRACT(EPOCH FROM NOW())::bigint, $5::date, 
+              $6::date, $7::date, $8, $9, $10)
+      RETURNING *;
+
+  get-user-bookings:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Get all bookings for a user with item details
+    parameters:
+      - name: user_id
+        type: integer
+        description: The user ID
+    statement: |
+      SELECT b.*, 
+             CASE 
+               WHEN b.booking_type = 'hotel' THEN h.name
+               WHEN b.booking_type = 'activity' THEN a.name
+               ELSE 'Unknown'
+             END as item_name,
+             CASE 
+               WHEN b.booking_type = 'hotel' THEN h.location
+               WHEN b.booking_type = 'activity' THEN a.city
+               ELSE 'Unknown'
+             END as item_location
+      FROM hachathonschema.bookings b
+      LEFT JOIN hachathonschema.hotels h ON b.item_id = h.id AND b.booking_type = 'hotel'
+      LEFT JOIN hachathonschema.activities a ON b.item_id = a.id AND b.booking_type = 'activity'
+      WHERE b.user_id = $1
+      ORDER BY b.created_at DESC;
+
+  # =====================================================
+  # USER TOOLS
+  # =====================================================
+  
+  create-user:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Create a new user in the database.
+    parameters:
+      - name: uid
+        type: string
+        description: Firebase user ID.
+      - name: email
+        type: string
+        description: User email address.
+      - name: display_name
+        type: string
+        description: User display name.
+      - name: photo_url
+        type: string
+        description: User profile picture URL.
+      - name: preferences
+        type: string
+        description: User preferences as JSON string.
+    statement: |
+      INSERT INTO hachathonschema.users 
+        (uid, email, display_name, photo_url, preferences, created_at, updated_at, last_login_at)
+      VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      ON CONFLICT (uid) DO UPDATE SET
+        email = EXCLUDED.email,
+        display_name = EXCLUDED.display_name,
+        photo_url = EXCLUDED.photo_url,
+        preferences = EXCLUDED.preferences,
+        updated_at = CURRENT_TIMESTAMP,
+        last_login_at = CURRENT_TIMESTAMP
+      RETURNING id;
+
+  get-user:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Get user by Firebase UID.
+    parameters:
+      - name: uid
+        type: string
+        description: Firebase user ID.
+    statement: |
+      SELECT * FROM hachathonschema.users WHERE uid = $1;
+
+  update-user:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Update user information.
+    parameters:
+      - name: uid
+        type: string
+        description: Firebase user ID.
+      - name: email
+        type: string
+        description: User email address.
+      - name: display_name
+        type: string
+        description: User display name.
+      - name: photo_url
+        type: string
+        description: User profile picture URL.
+      - name: preferences
+        type: string
+        description: User preferences as JSON string.
+    statement: |
+      UPDATE hachathonschema.users 
+      SET email = $2, display_name = $3, photo_url = $4, preferences = $5, updated_at = CURRENT_TIMESTAMP
+      WHERE uid = $1
+      RETURNING id;
+
+  delete-user:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Delete user by Firebase UID.
+    parameters:
+      - name: uid
+        type: string
+        description: Firebase user ID.
+    statement: |
+      DELETE FROM hachathonschema.users WHERE uid = $1;
+  
+toolsets:
+  my_first_toolset:
+    - search-hotels-by-location-and-activities
+    - save-itinerary
+    - get-user-itineraries
+    - get-user-bookings
+    - create-booking
+    - create-user
+    - get-user
+    - update-user
+    - delete-user
+

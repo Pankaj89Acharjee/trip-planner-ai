@@ -10,12 +10,13 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   updateProfile,
-  
+
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { userService, UserData } from '@/lib/userService';
+import { userSyncService, firestoreDataToSyncInPostgres, SyncUserData } from '@/lib/userSyncService';
 
 
 interface AuthContextType {
@@ -50,18 +51,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Skip auth state listener if Firebase is not initialized
+    // Skipping auth in firebase if firebase is not initialized
     if (!auth) {
       setLoading(false);
       return;
     }
-    
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         try {
           // Try to sync user with Firestore
           const firestoreUserData = await userService.syncUserWithFirestore(user);
+          console.log('Firestore user data:', firestoreUserData); 
           setUserData(firestoreUserData);
+
+          // Sync to PostgreSQL (async, don't wait)
+          const syncData = firestoreDataToSyncInPostgres(user, firestoreUserData);
+          console.log('Sync data:', syncData);
+          
+          userSyncService.syncUser(syncData)
+            .then((result) => console.log('User synced to PostgreSQL successfully:', result))
+            .catch(error => console.error('Failed to sync user to PostgreSQL:', error));
         } catch (error) {
           console.warn('Firestore sync failed, using Firebase Auth data:', error);
           // Fallback: create basic user data from Firebase Auth
@@ -78,6 +88,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             lastLoginAt: new Date().toISOString(),
           };
           setUserData(basicUserData);
+
+          // Still try to sync to PostgreSQL even with basic data (async, don't wait)
+          const syncData = firestoreDataToSyncInPostgres(user, basicUserData);
+          userSyncService.syncUser(syncData)
+            .then((result) => console.log('User synced to PostgreSQL successfully (fallback):', result))
+            .catch(error => console.error('Failed to sync user to PostgreSQL (fallback):', error));
         }
       } else {
         setUserData(null);
@@ -89,6 +105,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return unsubscribe;
   }, []);
 
+  
   const signIn = async (email: string, password: string) => {
     if (!auth) {
       throw new Error('Firebase authentication is not available');
@@ -105,16 +122,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (!auth) {
       throw new Error('Firebase authentication is not available');
     }
+    
+    let user: any = null;
+    let userData: any = null;
+    
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      
+      user = userCredential.user;
+
       // Update the user's display name
       await updateProfile(user, { displayName });
-      
+
       // Create user document in Firestore
       const userDocRef = doc(db, 'users', user.uid);
-      await setDoc(userDocRef, {
+      userData = {
         uid: user.uid,
         email: user.email,
         displayName: displayName,
@@ -125,10 +146,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           theme: 'light',
           language: 'en',
         },
-      });
+      };
+      await setDoc(userDocRef, userData);
+      console.log("User set in the Firestore with datra", userData)
     } catch (error) {
       console.error('Error signing up:', error);
       throw error;
+    }
+
+    // Sync to PostgreSQL (async, don't wait) - outside try-catch to prevent signup failure
+    console.log("Before Going to store data in the postgresql")
+    if (user && userData) {
+      console.log("Entered int the postgresql of block")
+      const syncData = firestoreDataToSyncInPostgres(user, userData);
+      userSyncService.syncUser(syncData)
+        .then((result) => console.log('New user synced to PostgreSQL successfully:', result))
+        .catch(error => console.error('Failed to sync new user to PostgreSQL:', error));
     }
   };
 
@@ -136,17 +169,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (!auth) {
       throw new Error('Firebase authentication is not available');
     }
+    
+    let user: any = null;
+    let userData: any = null;
+    let isNewUser = false;
+    
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      
+      user = result.user;
+
       // Create user document in Firestore if it doesn't exist
       const userDocRef = doc(db, 'users', user.uid);
       const userDoc = await getDoc(userDocRef);
-      
+
       if (!userDoc.exists()) {
-        await setDoc(userDocRef, {
+        isNewUser = true;
+        userData = {
           uid: user.uid,
           email: user.email,
           displayName: user.displayName || '',
@@ -157,11 +196,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             theme: 'light',
             language: 'en',
           },
-        });
+        };
+        await setDoc(userDocRef, userData);
+      } else {
+        // Update lastLoginAt for existing Google user
+        await setDoc(userDocRef, {
+          lastLoginAt: new Date().toISOString(),
+        }, { merge: true });
+        userData = { lastLoginAt: new Date().toISOString() };
       }
     } catch (error) {
       console.error('Error signing in with Google:', error);
       throw error;
+    }
+
+    // Sync to PostgreSQL (async, don't wait) - outside try-catch to prevent signup failure
+    if (user && userData) {
+      const syncData = firestoreDataToSyncInPostgres(user, userData);
+      const logMessage = isNewUser ? 'New Google user synced to PostgreSQL successfully:' : 'Existing Google user synced to PostgreSQL successfully:';
+      userSyncService.syncUser(syncData)
+        .then((result) => console.log(logMessage, result))
+        .catch(error => console.error(`Failed to sync ${isNewUser ? 'new' : 'existing'} Google user to PostgreSQL:`, error));
     }
   };
 
@@ -182,22 +237,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (user) {
         // Update Firebase Auth profile
         await updateProfile(user, data);
-        
-        // Try to update Firestore
+
+
         try {
           if (userData) {
+            // update Firestore
             const updatedUserData = await userService.updateUserProfile(user.uid, data);
             setUserData(updatedUserData);
+
+            // Sync to PostgreSQL (async, don't wait)
+            const syncData = firestoreDataToSyncInPostgres(user, updatedUserData);
+            userSyncService.updateUser(syncData)
+              .then((result) => console.log('User profile synced to PostgreSQL successfully:', result))
+              .catch(error => console.error('Failed to sync profile update to PostgreSQL:', error));
           }
         } catch (firestoreError) {
           console.warn('Firestore update failed, updating local data only:', firestoreError);
           // Update local userData with new values
           if (userData) {
-            setUserData({
+            const updatedUserData = {
               ...userData,
               ...data,
               updatedAt: new Date().toISOString(),
-            });
+            };
+            setUserData(updatedUserData);
+
+            // Still try to sync to PostgreSQL (async, don't wait)
+            const syncData = firestoreDataToSyncInPostgres(user, updatedUserData);
+            userSyncService.updateUser(syncData)
+              .then((result) => console.log('User profile synced to PostgreSQL successfully (fallback):', result))
+              .catch(error => console.error('Failed to sync profile update to PostgreSQL (fallback):', error));
           }
         }
       }
