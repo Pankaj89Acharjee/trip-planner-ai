@@ -29,7 +29,6 @@ async function getTooling() {
   return { toolset, toolMap, toolNames }
 }
 
-// 🔹 Dynamic normalization of tool results (no hardcoding)
 function normalizeToolResult(toolName, args, result) {
   if (!result) return 'EMPTY_RESULT'
 
@@ -38,11 +37,11 @@ function normalizeToolResult(toolName, args, result) {
     try {
       parsed = JSON.parse(result)
     } catch {
-      return result // if not JSON, return raw
+      return result 
     }
   }
 
-  // If args specify location, filter dynamically
+
   if (args?.location) {
     const location = args.location.toLowerCase()
 
@@ -193,7 +192,7 @@ export async function runAgent(question, context = {}) {
   return res.output
 }
 
-// Optional: direct sanity test of a specific MCP tool (run manually if needed)
+// Optional: MCP Tool test
 export async function directToolTest() {
   const { toolMap } = await getTooling()
   const t = toolMap.get('search-hotels-by-location')
