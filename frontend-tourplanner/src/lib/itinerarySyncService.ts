@@ -92,8 +92,9 @@ class ItinerarySyncService {
     }
 
     // Get user's itineraries from PostgreSQL
-    async getUserItineraries(userUid: string): Promise<SyncResponse> {
+    async getUserItineraries(userUid: string): Promise<any[]> {
         try {
+            console.log('Using URL for getting itinerarirs:', this.baseUrl);
             const response = await fetch(`${this.baseUrl}`, {
                 method: 'POST',
                 headers: {
@@ -110,7 +111,7 @@ class ItinerarySyncService {
             }
 
             const result = await response.json();
-            return result;
+            return result; // Return the array directly
         } catch (error) {
             console.error('Error getting user itineraries from PostgreSQL:', error);
             throw error;

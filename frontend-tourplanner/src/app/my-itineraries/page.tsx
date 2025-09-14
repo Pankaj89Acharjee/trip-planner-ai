@@ -16,7 +16,7 @@ export default function MyItinerariesPage() {
   const [itineraries, setItineraries] = useState<SavedItinerary[]>([]);
   const [loading, setLoading] = useState(true);
   const [bookingLoading, setBookingLoading] = useState<number | null>(null);
-  
+
   const { userData } = useAuth();
   const { toast } = useToast();
 
@@ -24,24 +24,57 @@ export default function MyItinerariesPage() {
     loadItineraries();
   }, []);
 
+  // Transform database data to frontend interface
+  const transformItineraryData = (dbData: any[]): SavedItinerary[] => {
+    return dbData.map(item => ({
+      id: item.id,
+      userUid: item.user_uid,
+      title: item.title,
+      destination: item.destination,
+      itinerary: item.itinerary_data || { itinerary: [], totalCost: 0, metadata: { searchResults: {}, recommendations: {} } },
+      status: item.status,
+      isFavorite: item.is_favorite,
+      travelDates: item.travel_dates,
+      participants: item.participants,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at
+    }));
+  };
+
   const loadItineraries = async () => {
     try {
       setLoading(true);
-      // Use Firebase UID directly - no mapping needed!
       if (!userData?.uid) {
         throw new Error('User not authenticated');
       }
-      
+
       const result = await itinerarySyncService.getUserItineraries(userData.uid);
-      
-      if (result.success && result.data) {
-        setItineraries(result.data);
+
+      // Parsinf the result if it's a string
+      let parsedResult = result;
+      if (typeof result === 'string') {
+        try {
+          parsedResult = JSON.parse(result);
+        } catch (parseError) {
+          console.error('Failed to parse result:', parseError);
+          toast({
+            variant: "destructive",
+            title: "Failed to Load Itineraries",
+            description: "Invalid JSON format received from server.",
+          });
+          return;
+        }
+      }
+
+      if (parsedResult && Array.isArray(parsedResult)) {
+        const transformedData = transformItineraryData(parsedResult);
+        setItineraries(transformedData);
       } else {
-        console.error('Failed to load itineraries:', result.error);
+        console.error('Failed to load itineraries - invalid data format:', parsedResult);
         toast({
           variant: "destructive",
           title: "Failed to Load Itineraries",
-          description: result.error || "Could not load your itineraries.",
+          description: "Invalid data format received from server.",
         });
       }
     } catch (error) {
@@ -58,12 +91,12 @@ export default function MyItinerariesPage() {
 
   const handleBook = async (itinerary: SavedItinerary) => {
     if (!itinerary.id) return;
-    
+
     setBookingLoading(itinerary.id);
     try {
       // First, update the itinerary status to 'booked'
       const updateResult = await itinerarySyncService.updateItineraryStatus(itinerary.id, 'booked');
-      
+
       if (updateResult.success) {
         // Create a booking record for the entire itinerary
         const bookingData = createBookingData(
@@ -84,7 +117,7 @@ export default function MyItinerariesPage() {
         );
 
         const bookingResult = await itinerarySyncService.createBooking(bookingData);
-        
+
         if (bookingResult.success) {
           toast({
             title: "Trip Booked!",
@@ -112,7 +145,7 @@ export default function MyItinerariesPage() {
   const handleDelete = async (itineraryId: number) => {
     try {
       const result = await itinerarySyncService.deleteItinerary(itineraryId);
-      
+
       if (result.success) {
         toast({
           title: "Itinerary Deleted",
@@ -170,18 +203,24 @@ export default function MyItinerariesPage() {
               </p>
             </div>
           </div>
-          
+
           {itineraries.length === 0 ? (
-            <div className="text-center py-12">
-              <BookOpen className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+            <div className="text-center py-20">
+              <div className="relative">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full blur-3xl opacity-20 scale-150"></div>
+                <div className="relative bg-white dark:bg-gray-800 rounded-full p-8 mx-auto w-32 h-32 flex items-center justify-center shadow-lg">
+                  <BookOpen className="h-16 w-16 text-blue-500" />
+                </div>
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 mt-8">
                 No itineraries yet
               </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Create your first itinerary to get started with your travel planning.
+              <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-md mx-auto text-lg">
+                Start your travel journey by creating your first personalized itinerary.
+                Our AI will help you plan the perfect trip!
               </p>
-              <Button asChild>
-                <a href="/">Create Itinerary</a>
+              <Button asChild size="lg" className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-8 py-3">
+                <a href="/">Create Your First Itinerary</a>
               </Button>
             </div>
           ) : (
@@ -204,37 +243,37 @@ export default function MyItinerariesPage() {
                       </Badge>
                     </div>
                   </CardHeader>
-                  
+
                   <CardContent>
                     <div className="space-y-3">
                       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                         <Calendar className="h-4 w-4" />
                         <span>
-                          {itinerary.travelDates ? 
+                          {itinerary.travelDates ?
                             `${new Date(itinerary.travelDates.startDate).toLocaleDateString()} - ${new Date(itinerary.travelDates.endDate).toLocaleDateString()}` :
                             'Dates not set'
                           }
                         </span>
                       </div>
-                      
+
                       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                         <Users className="h-4 w-4" />
                         <span>{itinerary.participants} participant{itinerary.participants > 1 ? 's' : ''}</span>
                       </div>
-                      
+
                       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                         <DollarSign className="h-4 w-4" />
                         <span className="font-medium">${itinerary.itinerary.totalCost.toLocaleString()}</span>
                       </div>
-                      
+
                       <div className="text-sm text-gray-600 dark:text-gray-400">
                         <span>{itinerary.itinerary.itinerary.length} day{itinerary.itinerary.itinerary.length > 1 ? 's' : ''} itinerary</span>
                       </div>
                     </div>
-                    
+
                     <div className="flex gap-2 mt-6">
                       {itinerary.status === 'saved' && (
-                        <Button 
+                        <Button
                           onClick={() => handleBook(itinerary)}
                           disabled={bookingLoading === itinerary.id}
                           className="flex-1 bg-green-600 hover:bg-green-700"
@@ -242,13 +281,13 @@ export default function MyItinerariesPage() {
                           {bookingLoading === itinerary.id ? "Booking..." : "Book Trip"}
                         </Button>
                       )}
-                      
+
                       {itinerary.status === 'booked' && (
                         <div className="flex-1 p-2 bg-green-100 text-green-800 rounded text-center text-sm font-medium">
                           ✅ Booked
                         </div>
                       )}
-                      
+
                       <Button
                         variant="outline"
                         size="sm"

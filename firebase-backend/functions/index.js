@@ -55,7 +55,7 @@ exports.agentAPI = functions.https.onRequest(async (req, res) => {
                 // Auto-saving the generated itinerary if userUid is provided
                 if (userUid && result) {
                     try {
-                        // Parse the result to extract itinerary data
+                        // Parsing the result to extract itinerary data
                         let jsonString = result;
                         if (jsonString?.includes('```json')) {
                             jsonString = jsonString.replace(/```json\s*/, '').replace(/\s*```/, '');
@@ -65,8 +65,7 @@ exports.agentAPI = functions.https.onRequest(async (req, res) => {
                         
                         const itineraryData = JSON.parse(jsonString || '{}');
                         
-                        if (itineraryData.itinerary && itineraryData.totalCost) {
-                            // Use formData if available, otherwise use defaults
+                        if (itineraryData.itinerary && itineraryData.totalCost) {                
                             const parsedFormData = formData || {};
                             
                             // Calculate end date from start date and duration

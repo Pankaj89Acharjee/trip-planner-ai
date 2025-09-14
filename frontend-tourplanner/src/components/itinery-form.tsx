@@ -17,7 +17,6 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { askAgent } from "@/lib/agentFunctionCall";
 import { ItineraryDisplay } from "./itinery-display";
-import { itinerarySyncService, itineraryDataToSyncInPostgres } from "@/lib/itinerarySyncService";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState } from "react";
 
@@ -53,14 +52,11 @@ type ItineraryFormProps = {
   setError: (error: string | null) => void;
   setFormValues?: (values: any) => void;
   setAdaptedItinerary?: (itinerary: any) => void;
-  setSaveFunction?: (saveFn: (itinerary: FullItinerary) => void) => void;
-  setIsSaving?: (saving: boolean) => void;
 };
 
-export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormValues, setAdaptedItinerary, setSaveFunction, setIsSaving: setIsSavingParent }: ItineraryFormProps) {
+export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormValues }: ItineraryFormProps) {
   const { toast } = useToast();
   const { userData } = useAuth();
-  const [isSaving, setIsSaving] = useState(false);
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -89,12 +85,7 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormVal
       const result = await askAgent(question, userData?.uid, values);
 
       console.log("Receive Itenery from Agent", result.answer)
-      // if (!result || !result.itinerary || result.itinerary.length === 0) {
-      //   throw new Error("The AI could not generate an itinerary. Please try again with different options.");
-      // }
-
-
-
+     
       //Removing markdown if any at the beginning
       let jsonString = result.answer;
       if (jsonString?.includes('```json')) {
@@ -102,7 +93,6 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormVal
       } else if (jsonString?.includes('```')) {
         jsonString = jsonString.replace(/```\s*/, '').replace(/\s*```/, '');
       }
-
 
 
       if (!result || !result.answer) {
@@ -129,16 +119,10 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormVal
       setIsLoading(false);
       setItinerary(itineraryData);
 
-      // Save form values for later use (e.g., saving itinerary)
+      // Save form values for saving itinerary
       if (setFormValues) {
         setFormValues(values);
       }
-
-      // Pass the save function to parent
-      if (setSaveFunction) {
-        setSaveFunction((itinerary: FullItinerary) => handleSaveItinerary(itinerary, values));
-      }
-
 
     } catch (error) {
       const errorMessage =
@@ -153,61 +137,6 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormVal
     }
   }
 
-  // Function to save itinerary manually
-  const handleSaveItinerary = async (itinerary: FullItinerary, formValues: z.infer<typeof formSchema>) => {
-    if (!userData) {
-      toast({
-        variant: "destructive",
-        title: "Authentication Required",
-        description: "Please sign in to save itineraries.",
-      });
-      return;
-    }
-
-    setIsSaving(true);
-    if (setIsSavingParent) setIsSavingParent(true);
-    try {
-      const itineraryData = itineraryDataToSyncInPostgres(
-        userData.uid,
-        `${formValues.destination} Trip`,
-        formValues.destination,
-        itinerary,
-        {
-          status: 'saved',
-          participants: formValues.participants,
-          isFavorite: formValues.isFavorite,
-          budget: formValues.budget,
-          preferences: formValues.interests,
-          totalDays: formValues.travelDuration,
-          travelDates: {
-            startDate: formValues.startDate,
-            endDate: new Date(new Date(formValues.startDate).getTime() + formValues.travelDuration * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-          }
-        }
-      );
-
-      const result = await itinerarySyncService.saveItinerary(itineraryData);
-
-      if (result.success) {
-        toast({
-          title: "Itinerary Saved!",
-          description: "Your itinerary has been saved successfully.",
-        });
-      } else {
-        throw new Error(result.error || "Failed to save itinerary");
-      }
-    } catch (error) {
-      console.error('Error saving itinerary:', error);
-      toast({
-        variant: "destructive",
-        title: "Save Failed",
-        description: error instanceof Error ? error.message : "Failed to save itinerary. Please try again.",
-      });
-    } finally {
-      setIsSaving(false);
-      if (setIsSavingParent) setIsSavingParent(false);
-    }
-  };
 
   return (
     <Card className="shadow-2xl shadow-primary/10">

@@ -15,8 +15,6 @@ export default function Home() {
     useState<AdaptedItinerary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveFunction, setSaveFunction] = useState<((itinerary: FullItinerary) => void) | null>(null);
 
 
 
@@ -40,8 +38,6 @@ export default function Home() {
                 setIsLoading={setIsLoading}
                 setError={setError}
                 setAdaptedItinerary={setAdaptedItinerary}
-                setSaveFunction={setSaveFunction}
-                setIsSaving={setIsSaving}
               />
             </div>
           )}
@@ -67,8 +63,6 @@ export default function Home() {
               setItinerary={setItinerary}
               adaptedItinerary={adaptedItinerary}
               setAdaptedItinerary={setAdaptedItinerary}
-              onSaveItinerary={saveFunction || (() => {})}
-              isSaving={isSaving}
             />
           )}
         </div>

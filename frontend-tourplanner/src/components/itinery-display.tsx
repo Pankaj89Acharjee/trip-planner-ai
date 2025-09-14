@@ -7,7 +7,7 @@ import { CostSummary } from "./cost-summary";
 import { MapView } from "./map-view";
 import { DynamicAdjustmentForm } from "./dynamic-adjustment";
 import { Button } from "./ui/button";
-import { ArrowLeft, Info, TrendingUp, MapPin, Calendar, Save } from "lucide-react";
+import { ArrowLeft, Info, TrendingUp, MapPin, Calendar } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 
@@ -16,11 +16,9 @@ type ItineraryDisplayProps = {
   setItinerary: (itinerary: FullItinerary | null) => void;
   adaptedItinerary: AdaptedItinerary | null;
   setAdaptedItinerary: (itinerary: AdaptedItinerary | null) => void;
-  onSaveItinerary?: (itinerary: FullItinerary) => void;
-  isSaving?: boolean;
 };
 
-export function ItineraryDisplay({ itinerary, setItinerary, adaptedItinerary, setAdaptedItinerary, onSaveItinerary, isSaving }: ItineraryDisplayProps) {
+export function ItineraryDisplay({ itinerary, setItinerary, adaptedItinerary, setAdaptedItinerary }: ItineraryDisplayProps) {
   const [bookedItems, setBookedItems] = useState<Set<string>>(new Set());
 
   const handleBookItem = (itemId: string) => {
@@ -39,16 +37,6 @@ export function ItineraryDisplay({ itinerary, setItinerary, adaptedItinerary, se
           <ArrowLeft className="mr-2 h-4 w-4" />
           Start Over
         </Button>
-        {onSaveItinerary && (
-          <Button 
-            onClick={() => onSaveItinerary(itinerary)} 
-            disabled={isSaving}
-            className="bg-green-600 hover:bg-green-700 text-white"
-          >
-            <Save className="mr-2 h-4 w-4" />
-            {isSaving ? "Saving..." : "Save Itinerary"}
-          </Button>
-        )}
       </div>
 
       {/* Search Results & Recommendations */}

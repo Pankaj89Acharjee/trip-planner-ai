@@ -8,7 +8,7 @@ import {
   SidebarMenuButton,
   SidebarHeader,
 } from "@/components/ui/sidebar";
-import { BarChart, Map, Thermometer } from "lucide-react";
+import { BarChart, Map, Thermometer, BookOpen } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -16,6 +16,7 @@ const AppSidebar = () => {
   const pathname = usePathname();
 
   const menuItems = [
+    { href: "/my-itineraries", label: "My Itineraries", icon: BookOpen },
     { href: "/charts", label: "Charts", icon: BarChart },
     { href: "/map", label: "Map", icon: Map },
     { href: "/weather", label: "Weather", icon: Thermometer },
