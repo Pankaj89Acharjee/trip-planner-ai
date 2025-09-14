@@ -3,7 +3,7 @@ export type AgentResponse = {
   error?: string;
 };
 
-export async function askAgent(question: string): Promise<AgentResponse> {
+export async function askAgent(question: string, userUid?: string, formData?: any): Promise<AgentResponse> {
   const url = process.env.NEXT_PUBLIC_AGENT_URL || "https://agentapi-clzbcargga-uc.a.run.app";
   //const url = process.env.NEXT_PUBLIC_LOCAL_AGENT_URL;
   
@@ -12,10 +12,25 @@ export async function askAgent(question: string): Promise<AgentResponse> {
   }
 
   try {
+    const requestBody: any = { 
+      question,
+      action: 'generate' 
+    };
+    
+    // Adding userUid for itinerary auto-saving functionality
+    if (userUid) {
+      requestBody.userUid = userUid;
+    }
+    
+    // Adding form data for auto-saving
+    if (formData) {
+      requestBody.formData = formData;
+    }
+
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify(requestBody),
     });
 
     const data = (await res.json()) as AgentResponse;

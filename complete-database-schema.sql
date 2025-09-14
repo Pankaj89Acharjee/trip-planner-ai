@@ -17,8 +17,21 @@ CREATE TABLE IF NOT EXISTS hachathonschema.locations (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 2. ENHANCED USERS TABLE (Your existing table - adding missing fields)
-ALTER TABLE hachathonschema.users ADD COLUMN IF NOT EXISTS location_id INTEGER REFERENCES hachathonschema.locations(id);
+-- 2. ENHANCED USERS TABLE (Updated to use Firebase UID as primary key)
+-- Drop existing users table and recreate with Firebase UID
+DROP TABLE IF EXISTS hachathonschema.users CASCADE;
+
+CREATE TABLE hachathonschema.users (
+    uid VARCHAR(255) PRIMARY KEY, -- Firebase UID as primary key
+    email VARCHAR(255) NOT NULL UNIQUE,
+    display_name VARCHAR(255),
+    photo_url VARCHAR(500),
+    preferences JSONB DEFAULT '{"theme": "light", "language": "en"}',
+    location_id INTEGER REFERENCES hachathonschema.locations(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_login_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 
 -- 3. ENHANCED ACTIVITIES TABLE (Your existing table - adding location relationship)
@@ -31,18 +44,32 @@ ALTER TABLE hachathonschema.activities ADD COLUMN IF NOT EXISTS max_participants
 ALTER TABLE hachathonschema.hotels ADD COLUMN IF NOT EXISTS location_id INTEGER REFERENCES hachathonschema.locations(id);
 
 
--- 5. ENHANCED USER_ITINERARIES TABLE (Your existing table - adding missing fields)
-ALTER TABLE hachathonschema.user_itineraries ADD COLUMN IF NOT EXISTS title VARCHAR(255);
-ALTER TABLE hachathonschema.user_itineraries ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft', 'saved', 'booked', 'completed', 'cancelled'));
-ALTER TABLE hachathonschema.user_itineraries ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN DEFAULT FALSE;
-ALTER TABLE hachathonschema.user_itineraries ADD COLUMN IF NOT EXISTS travel_dates JSON; -- {"start_date": "2024-01-01", "end_date": "2024-01-05"}
-ALTER TABLE hachathonschema.user_itineraries ADD COLUMN IF NOT EXISTS participants INTEGER DEFAULT 1;
-ALTER TABLE hachathonschema.user_itineraries ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+-- 5. ENHANCED USER_ITINERARIES TABLE (Updated to use Firebase UID)
+-- Drop existing table and recreate with Firebase UID
+DROP TABLE IF EXISTS hachathonschema.user_itineraries CASCADE;
 
--- 6. BOOKINGS TABLE (New table for actual bookings)
+CREATE TABLE hachathonschema.user_itineraries (
+    id SERIAL PRIMARY KEY,
+    user_uid VARCHAR(255) NOT NULL REFERENCES hachathonschema.users(uid) ON DELETE CASCADE,
+    title VARCHAR(255),
+    destination VARCHAR(255) NOT NULL,
+    total_days INTEGER NOT NULL,
+    total_cost INTEGER NOT NULL,
+    budget INTEGER NOT NULL,
+    preferences JSONB, -- User preferences as JSON
+    itinerary_data JSONB NOT NULL, -- Full itinerary object
+    status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft', 'saved', 'booked', 'completed', 'cancelled')),
+    is_favorite BOOLEAN DEFAULT FALSE,
+    travel_dates JSONB, -- {"start_date": "2024-01-01", "end_date": "2024-01-05"}
+    participants INTEGER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 6. BOOKINGS TABLE (Updated to use Firebase UID)
 CREATE TABLE IF NOT EXISTS hachathonschema.bookings (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES hachathonschema.users(id) ON DELETE CASCADE,
+    user_uid VARCHAR(255) NOT NULL REFERENCES hachathonschema.users(uid) ON DELETE CASCADE,
     itinerary_id INTEGER REFERENCES hachathonschema.user_itineraries(id) ON DELETE SET NULL,
     booking_type VARCHAR(20) NOT NULL CHECK (booking_type IN ('hotel', 'activity', 'package')),
     item_id INTEGER NOT NULL, -- References hotels.id or activities.id
@@ -51,8 +78,8 @@ CREATE TABLE IF NOT EXISTS hachathonschema.bookings (
     check_in_date DATE,
     check_out_date DATE,
     quantity INTEGER DEFAULT 1,
-    unit_price DECIMAL(10,2) NOT NULL,
-    total_amount DECIMAL(10,2) NOT NULL,
+    unit_price INTEGER NOT NULL,
+    total_amount INTEGER NOT NULL,
     currency VARCHAR(3) DEFAULT 'USD',
     status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'cancelled', 'completed')),
     payment_status VARCHAR(20) DEFAULT 'pending' CHECK (payment_status IN ('pending', 'paid', 'refunded', 'failed')),
@@ -78,10 +105,10 @@ CREATE TABLE IF NOT EXISTS hachathonschema.booking_payments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 8. USER_REVIEWS TABLE (Reviews for hotels and activities)
+-- 8. USER_REVIEWS TABLE (Updated to use Firebase UID)
 CREATE TABLE IF NOT EXISTS hachathonschema.user_reviews (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES hachathonschema.users(id) ON DELETE CASCADE,
+    user_uid VARCHAR(255) NOT NULL REFERENCES hachathonschema.users(uid) ON DELETE CASCADE,
     booking_id INTEGER REFERENCES hachathonschema.bookings(id) ON DELETE SET NULL,
     review_type VARCHAR(20) NOT NULL CHECK (review_type IN ('hotel', 'activity')),
     item_id INTEGER NOT NULL, -- References hotels.id or activities.id
@@ -94,20 +121,20 @@ CREATE TABLE IF NOT EXISTS hachathonschema.user_reviews (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 9. USER_FAVORITES TABLE (User's favorite items)
+-- 9. USER_FAVORITES TABLE (Updated to use Firebase UID)
 CREATE TABLE IF NOT EXISTS hachathonschema.user_favorites (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES hachathonschema.users(id) ON DELETE CASCADE,
+    user_uid VARCHAR(255) NOT NULL REFERENCES hachathonschema.users(uid) ON DELETE CASCADE,
     favorite_type VARCHAR(20) NOT NULL CHECK (favorite_type IN ('hotel', 'activity', 'location', 'itinerary')),
     item_id INTEGER NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, favorite_type, item_id)
+    UNIQUE(user_uid, favorite_type, item_id)
 );
 
--- 10. NOTIFICATIONS TABLE (User notifications)
+-- 10. NOTIFICATIONS TABLE (Updated to use Firebase UID)
 CREATE TABLE IF NOT EXISTS hachathonschema.notifications (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES hachathonschema.users(id) ON DELETE CASCADE,
+    user_uid VARCHAR(255) NOT NULL REFERENCES hachathonschema.users(uid) ON DELETE CASCADE,
     notification_type VARCHAR(50) NOT NULL,
     title VARCHAR(255) NOT NULL,
     message TEXT NOT NULL,
@@ -139,29 +166,29 @@ CREATE INDEX IF NOT EXISTS idx_hotels_price_tier ON hachathonschema.hotels(price
 CREATE INDEX IF NOT EXISTS idx_hotels_cost_per_night ON hachathonschema.hotels(cost_per_night);
 
 -- User itineraries indexes
-CREATE INDEX IF NOT EXISTS idx_user_itineraries_user_id ON hachathonschema.user_itineraries(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_itineraries_user_uid ON hachathonschema.user_itineraries(user_uid);
 CREATE INDEX IF NOT EXISTS idx_user_itineraries_destination ON hachathonschema.user_itineraries(destination);
 CREATE INDEX IF NOT EXISTS idx_user_itineraries_status ON hachathonschema.user_itineraries(status);
 CREATE INDEX IF NOT EXISTS idx_user_itineraries_created_at ON hachathonschema.user_itineraries(created_at DESC);
 
 -- Bookings indexes
-CREATE INDEX IF NOT EXISTS idx_bookings_user_id ON hachathonschema.bookings(user_id);
+CREATE INDEX IF NOT EXISTS idx_bookings_user_uid ON hachathonschema.bookings(user_uid);
 CREATE INDEX IF NOT EXISTS idx_bookings_itinerary_id ON hachathonschema.bookings(itinerary_id);
 CREATE INDEX IF NOT EXISTS idx_bookings_booking_reference ON hachathonschema.bookings(booking_reference);
 CREATE INDEX IF NOT EXISTS idx_bookings_status ON hachathonschema.bookings(status);
 CREATE INDEX IF NOT EXISTS idx_bookings_booking_date ON hachathonschema.bookings(booking_date);
 
 -- Reviews indexes
-CREATE INDEX IF NOT EXISTS idx_user_reviews_user_id ON hachathonschema.user_reviews(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_reviews_user_uid ON hachathonschema.user_reviews(user_uid);
 CREATE INDEX IF NOT EXISTS idx_user_reviews_item_id ON hachathonschema.user_reviews(item_id);
 CREATE INDEX IF NOT EXISTS idx_user_reviews_review_type ON hachathonschema.user_reviews(review_type);
 
 -- Favorites indexes
-CREATE INDEX IF NOT EXISTS idx_user_favorites_user_id ON hachathonschema.user_favorites(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_favorites_user_uid ON hachathonschema.user_favorites(user_uid);
 CREATE INDEX IF NOT EXISTS idx_user_favorites_type_item ON hachathonschema.user_favorites(favorite_type, item_id);
 
 -- Notifications indexes
-CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON hachathonschema.notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_uid ON hachathonschema.notifications(user_uid);
 CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON hachathonschema.notifications(is_read);
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON hachathonschema.notifications(created_at DESC);
 

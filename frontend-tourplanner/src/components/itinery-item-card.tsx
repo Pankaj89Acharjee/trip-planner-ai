@@ -97,7 +97,7 @@ export function ItineraryItemCard({
           {cost > 0 && (
             <div className="flex items-center gap-1.5">
               <Wallet className="h-4 w-4 text-muted-foreground" />
-              <span>${cost.toLocaleString()}</span>
+              <span>₹{cost.toLocaleString()}</span>
             </div>
           )}
           {duration && (

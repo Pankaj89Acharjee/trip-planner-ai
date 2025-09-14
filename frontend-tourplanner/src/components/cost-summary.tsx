@@ -61,7 +61,7 @@ export function CostSummary({ totalCost, itinerary }: CostSummaryProps) {
         <div className="flex justify-between items-baseline">
           <span className="text-muted-foreground">Total Estimated Cost</span>
           <span className="text-2xl font-bold text-primary">
-            ${totalCost.toLocaleString()}
+            ₹{totalCost.toLocaleString()}
           </span>
         </div>
         <Separator />
@@ -70,19 +70,19 @@ export function CostSummary({ totalCost, itinerary }: CostSummaryProps) {
             <span className="flex items-center gap-2 text-muted-foreground">
               <BedDouble className="h-4 w-4" /> Accommodation
             </span>
-            <span>${costBreakdown.accommodation.toLocaleString()}</span>
+            <span>₹{costBreakdown.accommodation.toLocaleString()}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="flex items-center gap-2 text-muted-foreground">
               <Plane className="h-4 w-4" /> Transportation
             </span>
-            <span>${costBreakdown.transportation.toLocaleString()}</span>
+            <span>₹{costBreakdown.transportation.toLocaleString()}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="flex items-center gap-2 text-muted-foreground">
               <Sparkles className="h-4 w-4" /> Activities
             </span>
-            <span>${costBreakdown.activities.toLocaleString()}</span>
+            <span>₹{costBreakdown.activities.toLocaleString()}</span>
           </div>
         </div>
       </CardContent>

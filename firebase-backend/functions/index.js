@@ -13,6 +13,7 @@ const functions = require("firebase-functions");
 const { runAgent } = require("./agent-vertexAI");
 const cors = require('cors')({ origin: true });
 const { databaseAgent } = require("./agent-userDB");
+const { itineraryDatabaseAgent } = require("./agent-itineraryDB");
 
 
 // // For cost control, you can set the maximum number of containe  rs that can be
@@ -38,15 +39,137 @@ const { databaseAgent } = require("./agent-userDB");
 exports.agentAPI = functions.https.onRequest(async (req, res) => {
     return cors(req, res, async () => {
         try {
-            const question = req.body.question
-            if (!question) {
-                return res.status(400).json({ error: "Question is required" });
+            const { question, action, userUid, itineraryData, itineraryId, status, bookingData, formData } = req.body;
+            
+           //For generating new itinerary as per users question
+            if (action === 'generate') {
+                // Generate itinerary
+                if (!question) {
+                    return res.status(400).json({ error: "Question is required" });
+                }
+                
+                console.log('Running agent with question:', question);
+                console.log('Form data received:', formData);
+                const result = await runAgent(question);
+                
+                // Auto-saving the generated itinerary if userUid is provided
+                if (userUid && result) {
+                    try {
+                        // Parse the result to extract itinerary data
+                        let jsonString = result;
+                        if (jsonString?.includes('```json')) {
+                            jsonString = jsonString.replace(/```json\s*/, '').replace(/\s*```/, '');
+                        } else if (jsonString?.includes('```')) {
+                            jsonString = jsonString.replace(/```\s*/, '').replace(/\s*```/, '');
+                        }
+                        
+                        const itineraryData = JSON.parse(jsonString || '{}');
+                        
+                        if (itineraryData.itinerary && itineraryData.totalCost) {
+                            // Use formData if available, otherwise use defaults
+                            const parsedFormData = formData || {};
+                            
+                            // Calculate end date from start date and duration
+                            const startDate = parsedFormData.startDate || new Date().toISOString().split('T')[0];
+                            const duration = parsedFormData.travelDuration || 1;
+                            const endDate = new Date(new Date(startDate).getTime() + duration * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+                            
+                            // Auto-save to PostgreSQL with enhanced form data
+                            const saveResult = await itineraryDatabaseAgent('save', {
+                                itineraryData: {
+                                    userUid: userUid,
+                                    title: `${parsedFormData.destination || 'Generated'} Trip`,
+                                    destination: parsedFormData.destination || 'Generated Destination',
+                                    itinerary: itineraryData,
+                                    status: 'draft',
+                                    participants: parsedFormData.participants || 1,
+                                    isFavorite: parsedFormData.isFavorite || false,
+                                    budget: parsedFormData.budget || 0,
+                                    preferences: parsedFormData.interests || [],
+                                    totalDays: parsedFormData.travelDuration || 1,
+                                    travelDates: {
+                                        startDate: startDate,
+                                        endDate: endDate
+                                    }
+                                }
+                            });
+                            
+                            console.log('Auto-saved itinerary:', saveResult);
+                        }
+                    } catch (saveError) {
+                        console.error('Failed to auto-save itinerary:', saveError);
+                        // Don't fail the main request if auto-save fails
+                    }
+                }
+                
+                res.json({ answer: result });
+                
+            } else if (action === 'save') {
+                // Explicit save itinerary
+                if (!itineraryData || !itineraryData.userUid) {
+                    return res.status(400).json({ error: "Itinerary data with userUid is required" });
+                }
+                
+                const result = await itineraryDatabaseAgent('save', { itineraryData });
+                res.json(result);
+                
+            } else if (action === 'getUserItineraries') {
+                // Get user's itineraries
+                if (!userUid) {
+                    return res.status(400).json({ error: "UserUid is required" });
+                }
+                
+                const result = await itineraryDatabaseAgent('getUserItineraries', { userUid });
+                res.json(result);
+                
+            } else if (action === 'updateStatus') {
+                // Update itinerary status
+                if (!itineraryId || !status) {
+                    return res.status(400).json({ error: "ItineraryId and status are required" });
+                }
+                
+                const result = await itineraryDatabaseAgent('updateStatus', { itineraryId, status });
+                res.json(result);
+                
+            } else if (action === 'createBooking') {
+                // Create booking
+                if (!bookingData || !bookingData.userUid) {
+                    return res.status(400).json({ error: "Booking data with userUid is required" });
+                }
+                
+                const result = await itineraryDatabaseAgent('createBooking', { bookingData });
+                res.json(result);
+                
+            } else if (action === 'getUserBookings') {
+                // Get user's bookings
+                if (!userUid) {
+                    return res.status(400).json({ error: "UserUid is required" });
+                }
+                
+                const result = await itineraryDatabaseAgent('getUserBookings', { userUid });
+                res.json(result);
+                
+            } else if (action === 'delete') {
+                // Delete itinerary
+                if (!itineraryId) {
+                    return res.status(400).json({ error: "ItineraryId is required" });
+                }
+                
+                const result = await itineraryDatabaseAgent('delete', { itineraryId });
+                res.json(result);
+                
+            } else {
+                // Default: generate itinerary (backward compatibility)
+                if (!question) {
+                    return res.status(400).json({ error: "Question is required" });
+                }
+                const result = await runAgent(question);
+                res.json({ answer: result });
             }
-            const result = await runAgent(question);
-            res.json({ answer: result });
+            
         } catch (error) {
-            console.error(error)
-            res.status(500).json({ error: error.message })
+            console.error('Agent API error:', error);
+            res.status(500).json({ error: error.message });
         }
     });
 });
@@ -102,6 +225,7 @@ exports.userAPI = functions.https.onRequest(async (req, res) => {
         }
     });
 });
+
 
 
 

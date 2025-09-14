@@ -67,9 +67,9 @@ tools:
     source: my-cloud-sql-source
     description: Save a generated itinerary to the database
     parameters:
-      - name: user_id
-        type: integer
-        description: The user ID (optional, can be null)
+      - name: user_uid
+        type: string
+        description: The user ID (Firebase UID)
       - name: title
         type: string
         description: Itinerary title
@@ -91,13 +91,22 @@ tools:
       - name: itinerary_data
         type: string
         description: Complete itinerary as JSON string
+      - name: status
+        type: string
+        description: Itinerary status (draft, saved, booked, completed, cancelled)
+      - name: is_favorite
+        type: boolean
+        description: Whether the itinerary is marked as favorite
+      - name: participants
+        type: integer
+        description: Number of participants
       - name: travel_dates
         type: string
         description: Travel dates as JSON string (optional)
     statement: |
       INSERT INTO hachathonschema.user_itineraries 
-        (user_id, title, destination, total_days, total_cost, budget, preferences, itinerary_data, travel_dates, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'saved')
+        (user_uid, title, destination, total_days, total_cost, budget, preferences, itinerary_data, status, is_favorite, participants, travel_dates)
+      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10, $11, $12::jsonb)
       RETURNING *;
 
   get-user-itineraries:
@@ -105,13 +114,49 @@ tools:
     source: my-cloud-sql-source
     description: Get all itineraries for a specific user
     parameters:
-      - name: user_id
-        type: integer
+      - name: user_uid
+        type: string
         description: The user ID
     statement: |
       SELECT * FROM hachathonschema.user_itineraries 
-      WHERE user_id = $1 
+      WHERE user_uid = $1 
       ORDER BY created_at DESC;
+
+
+  update-itinerary-status:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Update the status of an existing itinerary
+    parameters:
+      - name: itinerary_id
+        type: integer
+        description: The itinerary ID to update
+      - name: status
+        type: string
+        description: New status (draft, saved, booked, completed, cancelled)
+    statement: |
+      UPDATE hachathonschema.user_itineraries 
+      SET status = $2, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      RETURNING *;
+
+
+
+  delete-itinerary:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Delete an itinerary by ID
+    parameters:
+      - name: itinerary_id
+        type: integer
+        description: The itinerary ID to delete
+    statement: |
+      DELETE FROM hachathonschema.user_itineraries 
+      WHERE id = $1
+      RETURNING *;
+
+
+
 
   # =====================================================
   # BOOKING TOOLS
@@ -122,8 +167,8 @@ tools:
     source: my-cloud-sql-source
     description: Create a new booking
     parameters:
-      - name: user_id
-        type: integer
+      - name: user_uid
+        type: string
         description: The user ID
       - name: itinerary_id
         type: integer
@@ -152,12 +197,21 @@ tools:
       - name: total_amount
         type: integer
         description: Total booking amount
+      - name: currency
+        type: string
+        description: Currency code (defaults to USD)
+      - name: status
+        type: string
+        description: Booking status (defaults to pending)
+      - name: payment_status
+        type: string
+        description: Payment status (defaults to pending)
     statement: |
       INSERT INTO hachathonschema.bookings 
-        (user_id, itinerary_id, booking_type, item_id, booking_reference, booking_date, 
-         check_in_date, check_out_date, quantity, unit_price, total_amount)
+        (user_uid, itinerary_id, booking_type, item_id, booking_reference, booking_date, 
+        check_in_date, check_out_date, quantity, unit_price, total_amount, currency, status, payment_status)
       VALUES ($1, $2, $3, $4, 'BK-' || EXTRACT(EPOCH FROM NOW())::bigint, $5::date, 
-              $6::date, $7::date, $8, $9, $10)
+            $6::date, $7::date, $8, $9, $10, $11, $12, $13)
       RETURNING *;
 
   get-user-bookings:
@@ -165,8 +219,8 @@ tools:
     source: my-cloud-sql-source
     description: Get all bookings for a user with item details
     parameters:
-      - name: user_id
-        type: integer
+      - name: user_uid
+        type: string
         description: The user ID
     statement: |
       SELECT b.*, 
@@ -183,7 +237,7 @@ tools:
       FROM hachathonschema.bookings b
       LEFT JOIN hachathonschema.hotels h ON b.item_id = h.id AND b.booking_type = 'hotel'
       LEFT JOIN hachathonschema.activities a ON b.item_id = a.id AND b.booking_type = 'activity'
-      WHERE b.user_id = $1
+      WHERE b.user_uid = $1
       ORDER BY b.created_at DESC;
 
   # =====================================================
@@ -221,7 +275,7 @@ tools:
         preferences = EXCLUDED.preferences,
         updated_at = CURRENT_TIMESTAMP,
         last_login_at = CURRENT_TIMESTAMP
-      RETURNING id;
+      RETURNING uid;
 
   get-user:
     kind: postgres-sql
@@ -276,6 +330,7 @@ toolsets:
     - search-hotels-by-location-and-activities
     - save-itinerary
     - get-user-itineraries
+    - update-itinerary-status
     - get-user-bookings
     - create-booking
     - create-user

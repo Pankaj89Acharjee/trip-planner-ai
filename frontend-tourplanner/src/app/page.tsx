@@ -8,12 +8,17 @@ import { ItinerarySkeleton } from "@/components/itinery-skeleton";
 import { LayoutWrapper } from "@/components/layout-wrapper";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
+
 export default function Home() {
   const [itinerary, setItinerary] = useState<FullItinerary | null>(null);
   const [adaptedItinerary, setAdaptedItinerary] =
     useState<AdaptedItinerary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveFunction, setSaveFunction] = useState<((itinerary: FullItinerary) => void) | null>(null);
+
+
 
   return (
     <ProtectedRoute>
@@ -34,6 +39,9 @@ export default function Home() {
                 setItinerary={setItinerary}
                 setIsLoading={setIsLoading}
                 setError={setError}
+                setAdaptedItinerary={setAdaptedItinerary}
+                setSaveFunction={setSaveFunction}
+                setIsSaving={setIsSaving}
               />
             </div>
           )}
@@ -44,7 +52,7 @@ export default function Home() {
               <div className="text-center p-8 bg-red-50 border border-red-200 rounded-lg">
                 <h3 className="text-lg font-semibold text-red-800 mb-2">Error</h3>
                 <p className="text-red-600 mb-4">{error}</p>
-                <button 
+                <button
                   onClick={() => setError(null)}
                   className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
                 >
@@ -59,6 +67,8 @@ export default function Home() {
               setItinerary={setItinerary}
               adaptedItinerary={adaptedItinerary}
               setAdaptedItinerary={setAdaptedItinerary}
+              onSaveItinerary={saveFunction || (() => {})}
+              isSaving={isSaving}
             />
           )}
         </div>

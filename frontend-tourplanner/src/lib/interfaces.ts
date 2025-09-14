@@ -18,6 +18,14 @@ export interface Accommodation {
   location: Location;
 }
 
+export interface Transportation {
+  mode: string;
+  description: string;
+  cost: number;
+  duration: number;
+  location: Location;
+}
+
 export interface ItineraryDay {
   day: number;
   accommodation?: Accommodation;
@@ -44,7 +52,7 @@ export interface ItineraryMetadata {
   recommendations: Recommendations;
 }
 
-// UPDATED: Enhanced FullItinerary
+
 export interface FullItinerary {
   itinerary: ItineraryDay[];
   totalCost: number;
@@ -55,3 +63,45 @@ export interface AdaptedItinerary {
   adaptedItinerary: string;
   reasoning: string;
 }
+
+
+export interface SavedItinerary {
+  id?: number;
+  userUid: string; // Firebase UID
+  title: string;
+  destination: string;
+  itinerary: FullItinerary;
+  status: 'draft' | 'saved' | 'booked' | 'completed' | 'cancelled';
+  isFavorite: boolean;
+  travelDates?: {
+    startDate: string;
+    endDate: string;
+  };
+  participants: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+
+export interface BookingData {
+  id?: number;
+  userUid: string; // Firebase UID
+  itineraryId?: number;
+  bookingType: 'hotel' | 'activity' | 'package';
+  itemId: number;
+  bookingReference: string;
+  bookingDate: string;
+  checkInDate?: string;
+  checkOutDate?: string;
+  quantity: number;
+  unitPrice: number;
+  totalAmount: number;
+  currency: string;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
+  paymentStatus: 'pending' | 'paid' | 'refunded' | 'failed';
+  specialRequests?: string;
+  cancellationPolicy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+

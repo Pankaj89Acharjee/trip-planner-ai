@@ -155,6 +155,8 @@ async function buildExecutor() {
           }}
         }}
 
+        4. If you do not find any match as per user's request, then politely respond that you are not able to find any match and try to suggest some other destination or activities.
+
         WORKFLOW:
         1. Parse user input (destination, days, budget, interests)
         2. Search hotels for the destination
@@ -195,9 +197,9 @@ export async function runAgent(question, context = {}) {
 // Optional: MCP Tool test
 export async function directToolTest() {
   const { toolMap } = await getTooling()
-  const t = toolMap.get('search-hotels-by-location')
+  const t = toolMap.get('search-hotels-by-location-and-activities')
   if (!t) {
-    console.log('Tool not found: search-hotels-by-location')
+    console.log('Tool not found: search-hotels-by-location-and-activities')
     return
   }
   const out = await t({ location: 'Zurich' })

@@ -7,7 +7,7 @@ import { CostSummary } from "./cost-summary";
 import { MapView } from "./map-view";
 import { DynamicAdjustmentForm } from "./dynamic-adjustment";
 import { Button } from "./ui/button";
-import { ArrowLeft, Info, TrendingUp, MapPin, Calendar } from "lucide-react";
+import { ArrowLeft, Info, TrendingUp, MapPin, Calendar, Save } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 
@@ -16,9 +16,11 @@ type ItineraryDisplayProps = {
   setItinerary: (itinerary: FullItinerary | null) => void;
   adaptedItinerary: AdaptedItinerary | null;
   setAdaptedItinerary: (itinerary: AdaptedItinerary | null) => void;
+  onSaveItinerary?: (itinerary: FullItinerary) => void;
+  isSaving?: boolean;
 };
 
-export function ItineraryDisplay({ itinerary, setItinerary, adaptedItinerary, setAdaptedItinerary }: ItineraryDisplayProps) {
+export function ItineraryDisplay({ itinerary, setItinerary, adaptedItinerary, setAdaptedItinerary, onSaveItinerary, isSaving }: ItineraryDisplayProps) {
   const [bookedItems, setBookedItems] = useState<Set<string>>(new Set());
 
   const handleBookItem = (itemId: string) => {
@@ -32,10 +34,22 @@ export function ItineraryDisplay({ itinerary, setItinerary, adaptedItinerary, se
 
   return (
     <div className="w-full max-w-7xl ml-14 container p-2 mx-auto animate-in fade-in duration-500 overflow-auto">
-      <Button variant="ghost" onClick={handleStartOver} className="mb-6 dark:bg-gray-700 bg-gray-200 hover:bg-gray-300 dark:text-gray-300 text-gray-700">
-        <ArrowLeft className="mr-2 h-4 w-4" />
-        Start Over
-      </Button>
+      <div className="flex gap-4 mb-6">
+        <Button variant="ghost" onClick={handleStartOver} className="dark:bg-gray-700 bg-gray-200 hover:bg-gray-300 dark:text-gray-300 text-gray-700">
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Start Over
+        </Button>
+        {onSaveItinerary && (
+          <Button 
+            onClick={() => onSaveItinerary(itinerary)} 
+            disabled={isSaving}
+            className="bg-green-600 hover:bg-green-700 text-white"
+          >
+            <Save className="mr-2 h-4 w-4" />
+            {isSaving ? "Saving..." : "Save Itinerary"}
+          </Button>
+        )}
+      </div>
 
       {/* Search Results & Recommendations */}
       {itinerary.metadata && (
@@ -69,7 +83,7 @@ export function ItineraryDisplay({ itinerary, setItinerary, adaptedItinerary, se
                 </div>
                 <div className="text-center p-4 bg-white rounded-lg border border-blue-100 shadow-sm">
                   <div className="text-3xl font-bold text-orange-600 mb-1">
-                    ${itinerary.totalCost}
+                    ₹{itinerary.totalCost}
                   </div>
                   <div className="text-sm text-orange-700 font-medium">Total Cost</div>
                 </div>

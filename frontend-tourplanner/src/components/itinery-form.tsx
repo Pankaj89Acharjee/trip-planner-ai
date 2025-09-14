@@ -17,6 +17,9 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { askAgent } from "@/lib/agentFunctionCall";
 import { ItineraryDisplay } from "./itinery-display";
+import { itinerarySyncService, itineraryDataToSyncInPostgres } from "@/lib/itinerarySyncService";
+import { useAuth } from "@/contexts/AuthContext";
+import { useState } from "react";
 
 const interests = [
   { id: "heritage", label: "Heritage", icon: Landmark },
@@ -39,16 +42,25 @@ const formSchema = z.object({
     .number()
     .min(1, "Duration must be at least 1 day.")
     .max(14, "Duration cannot exceed 14 days."),
+  startDate: z.string().min(1, "Please select a start date."),
+  participants: z.number().min(1, "At least 1 participant required.").max(10, "Maximum 10 participants."),
+  isFavorite: z.boolean(),
 });
 
 type ItineraryFormProps = {
   setItinerary: (itinerary: FullItinerary | null) => void;
   setIsLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  setFormValues?: (values: any) => void;
+  setAdaptedItinerary?: (itinerary: any) => void;
+  setSaveFunction?: (saveFn: (itinerary: FullItinerary) => void) => void;
+  setIsSaving?: (saving: boolean) => void;
 };
 
-export function ItineraryForm({ setItinerary, setIsLoading, setError }: ItineraryFormProps) {
+export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormValues, setAdaptedItinerary, setSaveFunction, setIsSaving: setIsSavingParent }: ItineraryFormProps) {
   const { toast } = useToast();
+  const { userData } = useAuth();
+  const [isSaving, setIsSaving] = useState(false);
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -56,6 +68,9 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError }: Itinerar
       budget: 1000,
       interests: [],
       travelDuration: 3,
+      startDate: new Date().toISOString().split('T')[0],
+      participants: 1,
+      isFavorite: false,
     },
   });
 
@@ -66,14 +81,12 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError }: Itinerar
     console.log("Values submitted", values);
     try {
 
-      // UNCOMMENT LATER FOR THE BELOW Fx TO GET PERSONALIZED ITINERY
 
-      // const result = await generatePersonalizedItineraryAction({
-      //   ...values,
-      //   interests: values.interests as Array<"heritage" | "nightlife" | "adventure">,
-      // });
+      // Question passing to the AI agent
+      const question = `Generate a personalized travel itinerary for ${values.destination} with a total budget of ₹${values.budget} for ${values.travelDuration} days for ${values.participants} participants. This is the TOTAL budget for the entire trip, not per day. Interests: ${values.interests.join(', ')}. Start date: ${values.startDate}. Please find accommodation and activities within this total budget.`;
 
-      const result = await askAgent(JSON.stringify(values));
+      // Use Firebase UID directly - no mapping needed!
+      const result = await askAgent(question, userData?.uid, values);
 
       console.log("Receive Itenery from Agent", result.answer)
       // if (!result || !result.itinerary || result.itinerary.length === 0) {
@@ -116,6 +129,16 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError }: Itinerar
       setIsLoading(false);
       setItinerary(itineraryData);
 
+      // Save form values for later use (e.g., saving itinerary)
+      if (setFormValues) {
+        setFormValues(values);
+      }
+
+      // Pass the save function to parent
+      if (setSaveFunction) {
+        setSaveFunction((itinerary: FullItinerary) => handleSaveItinerary(itinerary, values));
+      }
+
 
     } catch (error) {
       const errorMessage =
@@ -129,6 +152,62 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError }: Itinerar
       setIsLoading(false);
     }
   }
+
+  // Function to save itinerary manually
+  const handleSaveItinerary = async (itinerary: FullItinerary, formValues: z.infer<typeof formSchema>) => {
+    if (!userData) {
+      toast({
+        variant: "destructive",
+        title: "Authentication Required",
+        description: "Please sign in to save itineraries.",
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    if (setIsSavingParent) setIsSavingParent(true);
+    try {
+      const itineraryData = itineraryDataToSyncInPostgres(
+        userData.uid,
+        `${formValues.destination} Trip`,
+        formValues.destination,
+        itinerary,
+        {
+          status: 'saved',
+          participants: formValues.participants,
+          isFavorite: formValues.isFavorite,
+          budget: formValues.budget,
+          preferences: formValues.interests,
+          totalDays: formValues.travelDuration,
+          travelDates: {
+            startDate: formValues.startDate,
+            endDate: new Date(new Date(formValues.startDate).getTime() + formValues.travelDuration * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+          }
+        }
+      );
+
+      const result = await itinerarySyncService.saveItinerary(itineraryData);
+
+      if (result.success) {
+        toast({
+          title: "Itinerary Saved!",
+          description: "Your itinerary has been saved successfully.",
+        });
+      } else {
+        throw new Error(result.error || "Failed to save itinerary");
+      }
+    } catch (error) {
+      console.error('Error saving itinerary:', error);
+      toast({
+        variant: "destructive",
+        title: "Save Failed",
+        description: error instanceof Error ? error.message : "Failed to save itinerary. Please try again.",
+      });
+    } finally {
+      setIsSaving(false);
+      if (setIsSavingParent) setIsSavingParent(false);
+    }
+  };
 
   return (
     <Card className="shadow-2xl shadow-primary/10">
@@ -253,6 +332,74 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError }: Itinerar
               )}
             />
 
+            <FormField
+              control={form.control}
+              name="startDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>When do you want to start your trip?</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} />
+                  </FormControl>
+                  <FormDescription className="text-gray-600">
+                    Select your preferred start date.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="participants"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>How many people are traveling?</FormLabel>
+                  <FormControl>
+                    <div>
+                      <div className="text-2xl font-bold text-primary mb-2 text-purple-500/90">
+                        {field.value} {field.value === 1 ? 'Person' : 'People'}
+                      </div>
+                      <Slider
+                        min={1}
+                        max={10}
+                        step={1}
+                        value={[field.value]}
+                        onValueChange={(vals) => field.onChange(vals[0])}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormDescription className="text-gray-600">
+                    Number of travelers for this trip.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="isFavorite"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>
+                      Mark as favorite
+                    </FormLabel>
+                    <FormDescription className="text-gray-600">
+                      Save this itinerary to your favorites for easy access.
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+
             <Button type="submit" size="lg" className="w-full bg-purple-400/90">
               <Sparkles className="mr-2 h-4 w-4 text-gray-800" />
               <span className="text-black space-x-2 text-base">Generate My Itinerary</span>
@@ -260,8 +407,7 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError }: Itinerar
           </form>
         </Form>
 
-        {/* Displaying the Contentsm when Data received from the MCP server through the Agent */}
-
+        {/* Displaying the Contents when Data received from the MCP server through the Agent */}
 
       </CardContent>
     </Card>
