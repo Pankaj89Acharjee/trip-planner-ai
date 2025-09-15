@@ -29,6 +29,21 @@ async function getTooling() {
   return { toolset, toolMap, toolNames }
 }
 
+function normalizeToolArgs(toolName, args) {
+  // Convert arguments for search tool
+  if (toolName === 'search-hotels-by-location-and-activities') {
+    // Convert interests array to comma-separated string
+    if (args.interests && Array.isArray(args.interests)) {
+      args.interests = args.interests.join(', ')
+    }
+    // Ensure budget is an integer
+    if (args.budget !== undefined) {
+      args.budget = parseInt(args.budget, 10)
+    }
+  }
+  return args
+}
+
 function normalizeToolResult(toolName, args, result) {
   if (!result) return 'EMPTY_RESULT'
 
@@ -75,8 +90,14 @@ async function buildExecutor() {
       args: z.record(z.any()).describe('Arguments object expected by that tool'),
     }),
     func: async ({ toolName, args }) => {
+      console.log(`🔧 TOOL INVOKED: ${toolName}`)
+      console.log(`📝 TOOL ARGS:`, JSON.stringify(args, null, 2))
+      
       const tool = toolMap.get(toolName)
-      if (!tool) return `Unknown tool: ${toolName}`
+      if (!tool) {
+        console.log(`❌ TOOL NOT FOUND: ${toolName}`)
+        return `Unknown tool: ${toolName}`
+      }
 
       // Validate arguments
       const schema = tool.getParamSchema?.()
@@ -86,19 +107,32 @@ async function buildExecutor() {
           const msg = parsed.error.issues
             .map(i => `${i.path.join('.') || '<root>'}: ${i.message}`)
             .join('; ')
+          console.log(`❌ INVALID ARGS for ${toolName}:`, msg)
           return `INVALID_ARGS for ${toolName}: ${msg}`
         }
         args = parsed.data
       }
 
-      const rawResult = await tool(args || {})
-      const normalized = normalizeToolResult(toolName, args, rawResult)
+      try {
+        // Normalize arguments before calling tool
+        const normalizedArgs = normalizeToolArgs(toolName, args || {})
+        console.log(`🔄 NORMALIZED ARGS:`, JSON.stringify(normalizedArgs, null, 2))
+        
+        console.log(`🚀 CALLING TOOL: ${toolName}`)
+        const rawResult = await tool(normalizedArgs)
+        console.log(`✅ TOOL RAW RESULT for ${toolName}:`, typeof rawResult, Array.isArray(rawResult) ? rawResult.length : 'not array')
+        console.log(`📊 TOOL RAW DATA:`, JSON.stringify(rawResult, null, 2))
+        
+        const normalized = normalizeToolResult(toolName, normalizedArgs, rawResult)
+        console.log(`🔄 TOOL NORMALIZED RESULT:`, normalized)
 
-      console.log('Tool result (normalized):', normalized)
-
-      return typeof normalized === 'string'
-        ? normalized
-        : JSON.stringify(normalized, null, 2)
+        return typeof normalized === 'string'
+          ? normalized
+          : JSON.stringify(normalized, null, 2)
+      } catch (error) {
+        console.error(`❌ TOOL ERROR ${toolName}:`, error)
+        return `Error calling ${toolName}: ${error.message}`
+      }
     },
   })
 
@@ -155,16 +189,33 @@ async function buildExecutor() {
           }}
         }}
 
-        4. If you do not find any match as per user's request, then politely respond that you are not able to find any match and try to suggest some other destination or activities.
+        4. If you do not find any match as per user's request, return JSON with empty itinerary and error message:
+        {{
+          "itinerary": [],
+          "totalCost": 0,
+          "metadata": {{
+            "searchResults": {{"hotelsFound": 0, "activitiesFound": 0, "availableRooms": 0}},
+            "recommendations": {{"error": "No matches found for your criteria. Please try a different destination, adjust your budget, or modify your interests."}}
+          }}
+        }}
 
         WORKFLOW:
         1. Parse user input (destination, days, budget, interests)
-        2. Search hotels for the destination
-        3. Search activities for each interest category
-        4. Create day-by-day itinerary
-        5. Calculate total costs
-        6. Return ONLY the JSON above
+        2. MANDATORY: Call invoke_toolbox with 'search-hotels-by-location-and-activities' tool
+        3. MANDATORY: Use the search results to create day-by-day itinerary
+        4. Calculate total costs from the found hotels and activities
+        5. Return ONLY the JSON above
 
+        TOOL PARAMETERS (EXACT NAMES REQUIRED - NO OTHER PARAMETERS ALLOWED):
+        For 'search-hotels-by-location-and-activities' tool, use ONLY these 3 parameters:
+        - location_name: string (destination name)
+        - budget: integer (total budget)
+        - interests: string (comma-separated, e.g., "heritage, food")
+
+        FORBIDDEN PARAMETERS (DO NOT USE): numberOfAdults, checkInDate, numberOfNights, location, maxBudget, priceRange, checkOutDate, max_budget, etc.
+        ONLY USE THE 3 PARAMETERS LISTED ABOVE. NO OTHER PARAMETERS.
+
+        CRITICAL: You MUST call invoke_toolbox first before deciding if matches exist. Do NOT return empty results without searching.
         DO NOT ask questions. DO NOT give partial responses. Generate the complete itinerary.`,
     ],
     new MessagesPlaceholder('chat_history'),

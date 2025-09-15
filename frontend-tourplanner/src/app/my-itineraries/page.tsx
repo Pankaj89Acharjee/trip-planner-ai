@@ -10,7 +10,7 @@ import { LayoutWrapper } from '@/components/layout-wrapper';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Calendar, MapPin, Users, DollarSign, BookOpen, Trash2, Star } from 'lucide-react';
+import { Calendar, MapPin, Users, BookOpen, Trash2, Star, IndianRupee } from 'lucide-react';
 
 export default function MyItinerariesPage() {
   const [itineraries, setItineraries] = useState<SavedItinerary[]>([]);
@@ -167,12 +167,12 @@ export default function MyItinerariesPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'draft': return 'bg-gray-100 text-gray-800';
-      case 'saved': return 'bg-blue-100 text-blue-800';
-      case 'booked': return 'bg-green-100 text-green-800';
-      case 'completed': return 'bg-purple-100 text-purple-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'draft': return 'bg-gray-100 text-gray-800 capitalize';
+      case 'saved': return 'bg-blue-100 text-blue-800 capitalize';
+      case 'booked': return 'bg-green-100 text-green-800 capitalize';
+      case 'completed': return 'bg-purple-100 text-purple-800 capitalize';
+      case 'cancelled': return 'bg-red-100 text-red-800 capitalize';
+      default: return 'bg-gray-100 text-gray-800 capitalize';
     }
   };
 
@@ -262,8 +262,8 @@ export default function MyItinerariesPage() {
                       </div>
 
                       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                        <DollarSign className="h-4 w-4" />
-                        <span className="font-medium">${itinerary.itinerary.totalCost.toLocaleString()}</span>
+                        <IndianRupee className="h-4 w-4" />
+                        <span className="font-medium">{itinerary.itinerary.totalCost.toLocaleString()} /-</span>
                       </div>
 
                       <div className="text-sm text-gray-600 dark:text-gray-400">

@@ -172,7 +172,7 @@ class ItinerarySyncService {
     }
 
     // Get user's bookings
-    async getUserBookings(userUid: string): Promise<SyncResponse> {
+    async getUserBookings(userUid: string): Promise<any[]> {
         try {
             const response = await fetch(`${this.baseUrl}`, {
                 method: 'POST',
@@ -190,9 +190,36 @@ class ItinerarySyncService {
             }
 
             const result = await response.json();
-            return result;
+            return result; // Return the array directly
         } catch (error) {
             console.error('Error getting user bookings from PostgreSQL:', error);
+            throw error;
+        }
+    }
+
+    // Update booking status (e.g., cancel booking)
+    async updateBookingStatus(bookingId: number, status: string): Promise<SyncResponse> {
+        try {
+            const response = await fetch(`${this.baseUrl}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'updateBookingStatus',
+                    bookingId: bookingId,
+                    status: status
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            return result;
+        } catch (error) {
+            console.error('Error updating booking status in PostgreSQL:', error);
             throw error;
         }
     }

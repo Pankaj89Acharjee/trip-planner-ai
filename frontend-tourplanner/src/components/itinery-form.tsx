@@ -60,8 +60,8 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormVal
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      destination: "Paris",
-      budget: 1000,
+      destination: "Delhi",
+      budget: 5000,
       interests: [],
       travelDuration: 3,
       startDate: new Date().toISOString().split('T')[0],
@@ -106,13 +106,25 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormVal
       } catch (error) {
         console.error('JSON Parse Error:', error);
         console.error('Raw response:', result.answer);
+        
+        // Check if the response is a text message (not JSON)
+        if (result.answer && !result.answer.includes('{') && !result.answer.includes('[')) {
+          // This is a text response, not JSON - show it as an error message
+          throw new Error(result.answer);
+        }
+        
         throw new Error("Invalid itinerary format received from AI.");
       }
 
 
       // Validate the structure
-      if (!itineraryData.itinerary || !itineraryData.totalCost) {
+      if (!itineraryData.itinerary || itineraryData.totalCost === undefined) {
         throw new Error("Invalid itinerary format received from AI.");
+      }
+
+      // Check if no matches were found
+      if (itineraryData.itinerary.length === 0 && itineraryData.metadata?.recommendations?.error) {
+        throw new Error(itineraryData.metadata.recommendations.error);
       }
 
       // Set loading to false first, then set itinerary
@@ -174,9 +186,9 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormVal
                         ₹{field.value.toLocaleString()}
                       </div>
                       <Slider
-                        min={100}
-                        max={10000}
-                        step={50}
+                        min={1000}
+                        max={500000}
+                        step={500}
                         value={[field.value]}
                         onValueChange={(vals) => field.onChange(vals[0])}
                       />

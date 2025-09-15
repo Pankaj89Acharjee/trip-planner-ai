@@ -107,6 +107,18 @@ export async function itineraryDatabaseAgent(action, data) {
             });
             return deleteResult;
 
+        case 'updateBookingStatus':
+            const updateBookingStatusTool = toolMap.get('update-booking-status');
+            if (!updateBookingStatusTool) {
+                return { success: false, error: "MISSING_AGENT" };
+            }
+
+            const updateBookingStatusResult = await updateBookingStatusTool({
+                booking_id: data.bookingId,
+                status: data.status
+            });
+            return updateBookingStatusResult;
+
         default:
             return { success: false, error: "INVALID_ACTION" };
     }

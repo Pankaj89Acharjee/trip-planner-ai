@@ -22,7 +22,7 @@ tools:
       - name: location_name
         type: string
         description: City or location name to search for
-      - name: max_budget
+      - name: budget
         type: integer
         description: Maximum budget filter (optional)
       - name: interests
@@ -31,30 +31,28 @@ tools:
     statement: |
       -- Search hotels by location with budget filter
       SELECT 'hotel' as type, 
-             h.id, h.name, h.location as city, h.cost_per_night, h.rating,
+             h.id, h.name, l.name as city, h.cost_per_night, h.rating,
              h.latitude, h.longitude, h.description, h.amenities,
              h.room_type, h.max_occupancy, h.image_url, h.price_tier,
              l.name as location_name, l.country, l.currency
       FROM hachathonschema.hotels h
       LEFT JOIN hachathonschema.locations l ON h.location_id = l.id
-      WHERE h.location ILIKE '%' || $1 || '%' 
-        AND h.is_active = true
-        AND ($2 IS NULL OR h.cost_per_night <= $2)
+      WHERE l.name ILIKE '%' || $1 || '%'         
+        AND h.cost_per_night <= COALESCE($2::numeric, h.cost_per_night)
       
       UNION ALL
       
       -- Search activities by city with budget and category filters
       SELECT 'activity' as type,
-             a.id, a.name, a.city, a.cost as cost_per_night, a.rating,
+             a.id, a.name, l.name as city, a.cost as cost_per_night, a.rating,
              a.latitude, a.longitude, a.description, NULL as amenities,
              a.category as room_type, a.duration_hours as max_occupancy, NULL as image_url, a.category as price_tier,
              l.name as location_name, l.country, l.currency
       FROM hachathonschema.activities a
       LEFT JOIN hachathonschema.locations l ON a.location_id = l.id
-      WHERE a.city ILIKE '%' || $1 || '%' 
-        AND a.is_active = true
-        AND ($2 IS NULL OR a.cost <= $2)
-        AND ($3 IS NULL OR a.category = ANY(string_to_array($3, ',')))
+      WHERE l.name ILIKE '%' || $1 || '%' 
+        AND a.cost <= COALESCE($2::numeric, a.cost)
+        AND a.category = ANY(string_to_array(COALESCE($3, a.category), ','))
       
       ORDER BY type, rating DESC;
 
@@ -214,6 +212,23 @@ tools:
             $6::date, $7::date, $8, $9, $10, $11, $12, $13)
       RETURNING *;
 
+  update-booking-status:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Update the status of a booking
+    parameters:
+      - name: booking_id
+        type: integer
+        description: The booking ID to update
+      - name: status
+        type: string
+        description: New status (pending, confirmed, cancelled, completed)
+    statement: |
+      UPDATE hachathonschema.bookings 
+      SET status = $2, updated_at = NOW()
+      WHERE id = $1
+      RETURNING *;
+
   get-user-bookings:
     kind: postgres-sql
     source: my-cloud-sql-source
@@ -230,13 +245,15 @@ tools:
                ELSE 'Unknown'
              END as item_name,
              CASE 
-               WHEN b.booking_type = 'hotel' THEN h.location
-               WHEN b.booking_type = 'activity' THEN a.city
+               WHEN b.booking_type = 'hotel' THEN lh.name
+               WHEN b.booking_type = 'activity' THEN la.name
                ELSE 'Unknown'
              END as item_location
       FROM hachathonschema.bookings b
       LEFT JOIN hachathonschema.hotels h ON b.item_id = h.id AND b.booking_type = 'hotel'
+      LEFT JOIN hachathonschema.locations lh ON h.location_id = lh.id
       LEFT JOIN hachathonschema.activities a ON b.item_id = a.id AND b.booking_type = 'activity'
+      LEFT JOIN hachathonschema.locations la ON a.location_id = la.id
       WHERE b.user_uid = $1
       ORDER BY b.created_at DESC;
 
@@ -333,6 +350,7 @@ toolsets:
     - update-itinerary-status
     - get-user-bookings
     - create-booking
+    - update-booking-status
     - create-user
     - get-user
     - update-user

@@ -1,30 +1,10 @@
 "use client";
 
 import type { Activity, Accommodation, Transportation } from "@/lib/interfaces";
-import {
-  BedDouble,
-  Bike,
-  Bus,
-  Car,
-  CheckCircle2,
-  Clock,
-  Landmark,
-  PartyPopper,
-  Plane,
-  Sparkles,
-  Train,
-  Wallet,
-} from "lucide-react";
+import { BedDouble, Bike, Bus, Car, CheckCircle2, Clock, Landmark, PartyPopper, Plane, Sparkles, Train, Wallet } from "lucide-react";
 import { Button } from "./ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DialogDescription } from "@radix-ui/react-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 
@@ -72,8 +52,8 @@ export function ItineraryItemCard({
     "cost" in item
       ? item.cost
       : "costPerNight" in item
-      ? item.costPerNight
-      : 0;
+        ? item.costPerNight
+        : 0;
   const duration = "duration" in item ? item.duration : null;
 
   const handlePayment = () => {
@@ -123,7 +103,7 @@ export function ItineraryItemCard({
               <DialogHeader>
                 <DialogTitle>Confirm Your Booking</DialogTitle>
                 <DialogDescription>
-                  You are about to book "{'name' in item ? item.name : item.mode}" for $
+                  You are about to book "{'name' in item ? item.name : item.mode}" for ₹
                   {cost.toLocaleString()}.
                 </DialogDescription>
               </DialogHeader>

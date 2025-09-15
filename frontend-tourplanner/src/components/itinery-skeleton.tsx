@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export function ItinerarySkeleton() {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start w-full max-w-7xl ml-14 container p-2 mx-auto">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start w-full max-w-6xl ml-4 lg:ml-26 mr-2 container p-2 mx-auto">
       <div className="lg:col-span-2 space-y-6">
         {[...Array(3)].map((_, i) => (
           <Card key={i} className="animate-pulse bg-gradient-to-r from-slate-100 via-slate-200 to-slate-100 dark:from-slate-800 dark:via-slate-700 dark:to-slate-800 border-slate-300 dark:border-slate-600">

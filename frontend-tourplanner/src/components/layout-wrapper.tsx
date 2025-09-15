@@ -19,7 +19,7 @@ export function LayoutWrapper({ children }: LayoutWrapperProps) {
     return (
       <>
         <AppSidebar />
-        <div className="flex-1 overflow-y-auto dark:bg-gradient-secondary bg-gradient-primary">
+        <div className="flex-1 pl-4 pr-8 overflow-y-auto dark:bg-gradient-secondary bg-gradient-primary">
           {children}
         </div>
       </>

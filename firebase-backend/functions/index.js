@@ -51,7 +51,7 @@ exports.agentAPI = functions.https.onRequest(async (req, res) => {
                 console.log('Running agent with question:', question);
                 console.log('Form data received:', formData);
                 const result = await runAgent(question);
-                
+                console.log("result from vertex ai is", result)
                 // Auto-saving the generated itinerary if userUid is provided
                 if (userUid && result) {
                     try {
@@ -146,6 +146,16 @@ exports.agentAPI = functions.https.onRequest(async (req, res) => {
                 }
                 
                 const result = await itineraryDatabaseAgent('getUserBookings', { userUid });
+                res.json(result);
+                
+            } else if (action === 'updateBookingStatus') {
+                // Update booking status
+                const { bookingId, status } = req.body;
+                if (!bookingId || !status) {
+                    return res.status(400).json({ error: "BookingId and status are required" });
+                }
+                
+                const result = await itineraryDatabaseAgent('updateBookingStatus', { bookingId, status });
                 res.json(result);
                 
             } else if (action === 'delete') {

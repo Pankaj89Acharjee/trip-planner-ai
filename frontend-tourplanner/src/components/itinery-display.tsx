@@ -31,7 +31,7 @@ export function ItineraryDisplay({ itinerary, setItinerary, adaptedItinerary, se
   };
 
   return (
-    <div className="w-full max-w-7xl ml-14 container p-2 mx-auto animate-in fade-in duration-500 overflow-auto">
+    <div className="w-full max-w-8xl ml-4 xl:ml-26 mr-2 container p-2 mx-auto animate-in fade-in duration-500 overflow-auto">
       <div className="flex gap-4 mb-6">
         <Button variant="ghost" onClick={handleStartOver} className="dark:bg-gray-700 bg-gray-200 hover:bg-gray-300 dark:text-gray-300 text-gray-700">
           <ArrowLeft className="mr-2 h-4 w-4" />
