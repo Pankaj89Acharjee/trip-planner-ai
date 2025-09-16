@@ -39,15 +39,15 @@ const { itineraryDatabaseAgent } = require("./agent-itineraryDB");
 exports.agentAPI = functions.https.onRequest(async (req, res) => {
     return cors(req, res, async () => {
         try {
-            const { question, action, userUid, itineraryData, itineraryId, status, bookingData, formData } = req.body;
-            
-           //For generating new itinerary as per users question
+            const { question, action, userUid, itineraryData, itineraryId, status, bookingData, formData, payment_status } = req.body;
+
+            //For generating new itinerary as per users question
             if (action === 'generate') {
                 // Generate itinerary
                 if (!question) {
                     return res.status(400).json({ error: "Question is required" });
                 }
-                
+
                 console.log('Running agent with question:', question);
                 console.log('Form data received:', formData);
                 const result = await runAgent(question);
@@ -62,17 +62,17 @@ exports.agentAPI = functions.https.onRequest(async (req, res) => {
                         } else if (jsonString?.includes('```')) {
                             jsonString = jsonString.replace(/```\s*/, '').replace(/\s*```/, '');
                         }
-                        
+
                         const itineraryData = JSON.parse(jsonString || '{}');
-                        
-                        if (itineraryData.itinerary && itineraryData.totalCost) {                
+
+                        if (itineraryData.itinerary && itineraryData.totalCost) {
                             const parsedFormData = formData || {};
-                            
+
                             // Calculate end date from start date and duration
                             const startDate = parsedFormData.startDate || new Date().toISOString().split('T')[0];
                             const duration = parsedFormData.travelDuration || 1;
                             const endDate = new Date(new Date(startDate).getTime() + duration * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-                            
+
                             // Auto-save to PostgreSQL with enhanced form data
                             const saveResult = await itineraryDatabaseAgent('save', {
                                 itineraryData: {
@@ -92,7 +92,7 @@ exports.agentAPI = functions.https.onRequest(async (req, res) => {
                                     }
                                 }
                             });
-                            
+
                             console.log('Auto-saved itinerary:', saveResult);
                         }
                     } catch (saveError) {
@@ -100,73 +100,73 @@ exports.agentAPI = functions.https.onRequest(async (req, res) => {
                         // Don't fail the main request if auto-save fails
                     }
                 }
-                
+
                 res.json({ answer: result });
-                
+
             } else if (action === 'save') {
                 // Explicit save itinerary
                 if (!itineraryData || !itineraryData.userUid) {
                     return res.status(400).json({ error: "Itinerary data with userUid is required" });
                 }
-                
+
                 const result = await itineraryDatabaseAgent('save', { itineraryData });
                 res.json(result);
-                
+
             } else if (action === 'getUserItineraries') {
                 // Get user's itineraries
                 if (!userUid) {
                     return res.status(400).json({ error: "UserUid is required" });
                 }
-                
+
                 const result = await itineraryDatabaseAgent('getUserItineraries', { userUid });
                 res.json(result);
-                
+
             } else if (action === 'updateStatus') {
                 // Update itinerary status
                 if (!itineraryId || !status) {
                     return res.status(400).json({ error: "ItineraryId and status are required" });
                 }
-                
+
                 const result = await itineraryDatabaseAgent('updateStatus', { itineraryId, status });
                 res.json(result);
-                
+
             } else if (action === 'createBooking') {
                 // Create booking
                 if (!bookingData || !bookingData.userUid) {
                     return res.status(400).json({ error: "Booking data with userUid is required" });
                 }
-                
+
                 const result = await itineraryDatabaseAgent('createBooking', { bookingData });
                 res.json(result);
-                
+
             } else if (action === 'getUserBookings') {
                 // Get user's bookings
                 if (!userUid) {
                     return res.status(400).json({ error: "UserUid is required" });
                 }
-                
+
                 const result = await itineraryDatabaseAgent('getUserBookings', { userUid });
                 res.json(result);
-                
+
             } else if (action === 'updateBookingStatus') {
                 // Update booking status
-                const { bookingId, status } = req.body;
-                if (!bookingId || !status) {
-                    return res.status(400).json({ error: "BookingId and status are required" });
+                const { bookingId, status, payment_status } = req.body;
+                if (!bookingId || !status || !payment_status) {
+                    return res.status(400).json({ error: "BookingId, payment_status and status are required" });
                 }
-                
-                const result = await itineraryDatabaseAgent('updateBookingStatus', { bookingId, status });
+
+                const result = await itineraryDatabaseAgent('updateBookingStatus', { bookingId, status, payment_status });
                 res.json(result);
-                
+
             } else if (action === 'delete') {
                 // Delete itinerary
                 if (!itineraryId) {
                     return res.status(400).json({ error: "ItineraryId is required" });
                 }
-                
-                const result = await itineraryDatabaseAgent('delete', { itineraryId });
+
+                const result = await itineraryDatabaseAgent('delete', { itineraryId, payment_status });
                 res.json(result);
-                
+
             } else {
                 // Default: generate itinerary (backward compatibility)
                 if (!question) {
@@ -175,7 +175,7 @@ exports.agentAPI = functions.https.onRequest(async (req, res) => {
                 const result = await runAgent(question);
                 res.json({ answer: result });
             }
-            
+
         } catch (error) {
             console.error('Agent API error:', error);
             res.status(500).json({ error: error.message });
@@ -193,17 +193,17 @@ exports.userAPI = functions.https.onRequest(async (req, res) => {
         'https://hackathon-competition-2025.web.app',
         'https://hackathon-competition-2025.firebaseapp.com'
     ];
-    
+
     if (allowedOrigins.includes(origin)) {
         res.set('Access-Control-Allow-Origin', origin);
     } else {
         res.set('Access-Control-Allow-Origin', '*');
     }
-    
+
     res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.set('Access-Control-Allow-Credentials', 'true');
- 
+
     // Handle preflight requests
     if (req.method === 'OPTIONS') {
         res.status(204).send('');

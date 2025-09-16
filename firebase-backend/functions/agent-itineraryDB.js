@@ -68,20 +68,42 @@ export async function itineraryDatabaseAgent(action, data) {
                 itinerary_id: data.bookingData.itineraryId,
                 booking_type: data.bookingData.bookingType,
                 item_id: data.bookingData.itemId,
-                booking_reference: data.bookingData.bookingReference,
                 booking_date: data.bookingData.bookingDate,
                 check_in_date: data.bookingData.checkInDate,
                 check_out_date: data.bookingData.checkOutDate,
                 quantity: data.bookingData.quantity || 1,
                 unit_price: data.bookingData.unitPrice,
                 total_amount: data.bookingData.totalAmount,
-                currency: data.bookingData.currency || 'USD',
+                currency: data.bookingData.currency || 'INR',
                 status: data.bookingData.status || 'pending',
-                payment_status: data.bookingData.paymentStatus || 'pending',
-                special_requests: data.bookingData.specialRequests,
-                cancellation_policy: data.bookingData.cancellationPolicy
+                payment_status: data.bookingData.payment_status || 'pending',
+                special_requests: data.bookingData.specialRequests || null,
+                cancellation_policy: data.bookingData.cancellationPolicy || null
             });
-            return createBookingResult;
+
+
+
+            // Parse the result if it's a string
+            let parsedBookingResult = createBookingResult;
+            if (typeof createBookingResult === 'string') {
+                try {
+                    parsedBookingResult = JSON.parse(createBookingResult);
+                } catch (error) {
+                    console.error('Failed to parse booking result:', error);
+                    return { success: false, error: "Invalid booking response format" };
+                }
+            }
+
+
+            // Wrap the result in a proper response object
+            if (parsedBookingResult && Array.isArray(parsedBookingResult) && parsedBookingResult.length > 0) {
+                return { success: true, data: parsedBookingResult[0] };
+            } else if (parsedBookingResult && typeof parsedBookingResult === 'object' && parsedBookingResult.id) {
+                // Handle case where tool returns a single object instead of array
+                return { success: true, data: parsedBookingResult };
+            } else {
+                return { success: false, error: "Failed to create booking" };
+            }
 
         case 'getUserBookings':
             // Get user's bookings
@@ -96,7 +118,6 @@ export async function itineraryDatabaseAgent(action, data) {
             return getUserBookingsResult;
 
         case 'delete':
-            // Delete itinerary
             const deleteItineraryTool = toolMap.get('delete-itinerary');
             if (!deleteItineraryTool) {
                 return { success: false, error: "MISSING_AGENT" };
@@ -105,7 +126,14 @@ export async function itineraryDatabaseAgent(action, data) {
             const deleteResult = await deleteItineraryTool({
                 itinerary_id: data.itineraryId
             });
-            return deleteResult;
+
+            let parsedDeleteResp = JSON.parse(deleteResult);
+
+            if (parsedDeleteResp && Array.isArray(parsedDeleteResp) && parsedDeleteResp.length > 0) {
+                return { success: true, data: parsedDeleteResp[0] };
+            } else {
+                return { success: false, error: "Failed to delete itinerary" };
+            }
 
         case 'updateBookingStatus':
             const updateBookingStatusTool = toolMap.get('update-booking-status');
@@ -113,11 +141,25 @@ export async function itineraryDatabaseAgent(action, data) {
                 return { success: false, error: "MISSING_AGENT" };
             }
 
-            const updateBookingStatusResult = await updateBookingStatusTool({
+            const updateBookingStatusParams = {
                 booking_id: data.bookingId,
-                status: data.status
-            });
-            return updateBookingStatusResult;
+                status: data.status,
+                payment_status: data.payment_status ?? 'KEEP_CURRENT'
+            };
+
+
+            console.log("Raw data received:", JSON.stringify(data, null, 2));           
+
+            const updateBookingStatusResult = await updateBookingStatusTool(updateBookingStatusParams);
+
+            let parsedUpdateBookingStatusResp = JSON.parse(updateBookingStatusResult);
+
+            // Wrap the result in a proper response object
+            if (parsedUpdateBookingStatusResp && Array.isArray(parsedUpdateBookingStatusResp) && parsedUpdateBookingStatusResp.length > 0) {
+                return { success: true, data: parsedUpdateBookingStatusResp[0] };
+            } else {
+                return { success: false, error: "Failed to update booking status" };
+            }
 
         default:
             return { success: false, error: "INVALID_ACTION" };

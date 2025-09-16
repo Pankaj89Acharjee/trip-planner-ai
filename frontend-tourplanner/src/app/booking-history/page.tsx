@@ -16,6 +16,7 @@ export default function BookingHistoryPage() {
   const [bookings, setBookings] = useState<BookingData[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancellingBooking, setCancellingBooking] = useState<number | null>(null);
+  const [payingBooking, setPayingBooking] = useState<number | null>(null);
 
   const { userData } = useAuth();
   const { toast } = useToast();
@@ -124,6 +125,33 @@ export default function BookingHistoryPage() {
     }
   };
 
+  const handlePayNow = async (bookingId: number) => {
+    setPayingBooking(bookingId);
+    try {
+      // Update booking status to confirmed and payment status to paid
+      const result = await itinerarySyncService.updateBookingStatus(bookingId, 'confirmed', 'paid');
+
+      if (result.success) {
+        toast({
+          title: "Payment Successful!",
+          description: "Your booking has been confirmed and payment processed.",
+        });
+        loadBookings(); // Refresh the list
+      } else {
+        throw new Error(result.error || "Failed to process payment");
+      }
+    } catch (error) {
+      console.error('Failed to process payment:', error);
+      toast({
+        variant: "destructive",
+        title: "Payment Failed",
+        description: error instanceof Error ? error.message : "Failed to process payment. Please try again.",
+      });
+    } finally {
+      setPayingBooking(null);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
@@ -211,16 +239,16 @@ export default function BookingHistoryPage() {
                         <div>
                           <CardTitle className="text-lg capitalize">{booking.bookingType} Booking</CardTitle>
                           <p className="text-sm text-gray-600 dark:text-gray-400">
-                            Ref: {booking.bookingReference}
+                            Ref No: {booking.bookingReference}
                           </p>
                         </div>
                       </div>
                       <div className="flex flex-col gap-1">
-                        <Badge className={getStatusColor(booking.status)}>
-                          {booking.status}
+                        <Badge className={`capitalize ${getStatusColor(booking.status)}`}>
+                          Booking: {booking.status}
                         </Badge>
-                        <Badge className={getPaymentStatusColor(booking.paymentStatus)}>
-                          {booking.paymentStatus}
+                        <Badge className={`capitalize ${getPaymentStatusColor(booking.paymentStatus)}`}>
+                          Payment: {booking.paymentStatus}
                         </Badge>
                       </div>
                     </div>
@@ -261,7 +289,7 @@ export default function BookingHistoryPage() {
                       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                         <DollarSign className="h-4 w-4" />
                         <span className="font-medium">
-                          {booking.currency || 'USD'} {booking.totalAmount.toLocaleString()}
+                          {booking.currency || 'INR'} {booking.totalAmount.toLocaleString()}
                         </span>
                       </div>
 
@@ -303,11 +331,34 @@ export default function BookingHistoryPage() {
                         </div>
                       )}
 
-                      {booking.status === 'completed' && (
+                      {booking.paymentStatus === 'paid' && (
                         <div className="flex-1 p-2 bg-green-100 text-green-800 rounded text-center text-sm font-medium">
                           <CheckCircle2 className="h-4 w-4 inline mr-1" />
                           Completed
                         </div>
+                      )}
+
+                      {booking.paymentStatus === 'pending' && (
+                        <Button
+                          variant="outline" size="sm"
+                          onClick={() => booking.id && handlePayNow(booking.id)}
+                          disabled={payingBooking === booking.id}
+                          className="flex-1 p-2 dark:bg-purple-800/90 bg-purple-800/
+                        90 dark:text-white-800 text-white rounded text-center text-sm 
+                        font-medium"
+                        >
+                          {payingBooking === booking.id ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                              Processing...
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard className="h-4 w-4 inline mr-1" />
+                              Pay Now
+                            </>
+                          )}
+                        </Button>
                       )}
                     </div>
                   </CardContent>

@@ -34,7 +34,7 @@ interface SyncBookingData {
     totalAmount: number;
     currency?: string;
     status?: 'pending' | 'confirmed' | 'cancelled' | 'completed';
-    paymentStatus?: 'pending' | 'paid' | 'refunded' | 'failed';
+    payment_status?: 'pending' | 'paid' | 'refunded' | 'failed';
     specialRequests?: string;
     cancellationPolicy?: string;
 }
@@ -198,18 +198,23 @@ class ItinerarySyncService {
     }
 
     // Update booking status (e.g., cancel booking)
-    async updateBookingStatus(bookingId: number, status: string): Promise<SyncResponse> {
+    async updateBookingStatus(bookingId: number, status: string, payment_status?: string): Promise<SyncResponse> {
+        console.log("payment status received in Itenerary in frontend is:", payment_status);
         try {
+            let bodyFormation = JSON.stringify({
+                action: 'updateBookingStatus',
+                bookingId: bookingId,
+                status: status,
+                payment_status: payment_status
+            });
+
+                        
             const response = await fetch(`${this.baseUrl}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    action: 'updateBookingStatus',
-                    bookingId: bookingId,
-                    status: status
-                }),
+                body: bodyFormation,
             });
 
             if (!response.ok) {
@@ -300,8 +305,8 @@ export const createBookingData = (
         unitPrice: unitPrice,
         totalAmount: totalAmount,
         currency: additionalData?.currency || 'USD',
-        status: 'pending',
-        paymentStatus: 'pending',
+        status: 'completed',
+        payment_status: 'pending',
         specialRequests: additionalData?.specialRequests,
         cancellationPolicy: additionalData?.cancellationPolicy,
     };

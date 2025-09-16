@@ -24,7 +24,7 @@ export default function MyItinerariesPage() {
     loadItineraries();
   }, []);
 
-  // Transform database data to frontend interface
+  // Transforming data for frontend display compatible
   const transformItineraryData = (dbData: any[]): SavedItinerary[] => {
     return dbData.map(item => ({
       id: item.id,
@@ -97,7 +97,23 @@ export default function MyItinerariesPage() {
       // First, update the itinerary status to 'booked'
       const updateResult = await itinerarySyncService.updateItineraryStatus(itinerary.id, 'booked');
 
-      if (updateResult.success) {
+      
+      // Parse the response if it's a string
+      let parsedResult = updateResult;
+      if (typeof updateResult === 'string') {
+        try {
+          parsedResult = JSON.parse(updateResult);
+        } catch (error) {
+          console.error('Failed to parse update result:', error);
+          throw new Error("Invalid response format from server");
+        }
+      }
+      
+      // Handle both array response and object response
+      const isUpdateSuccessful = Array.isArray(parsedResult) && parsedResult.length > 0 && parsedResult[0].status === 'booked';
+            
+
+      if (isUpdateSuccessful) {
         // Create a booking record for the entire itinerary
         const bookingData = createBookingData(
           userData?.uid || '', // Use Firebase UID directly
@@ -110,25 +126,36 @@ export default function MyItinerariesPage() {
             checkInDate: itinerary.travelDates?.startDate,
             checkOutDate: itinerary.travelDates?.endDate,
             quantity: itinerary.participants,
-            currency: 'USD',
+            currency: 'INR',
             specialRequests: `Complete itinerary booking for ${itinerary.destination}`,
-            cancellationPolicy: 'Standard cancellation policy applies'
+            cancellationPolicy: 'Standard cancellation policy applies',            
           }
         );
 
         const bookingResult = await itinerarySyncService.createBooking(bookingData);
-
-        if (bookingResult.success) {
+                
+        // Parse the booking response if it's a string
+        let parsedBookingResult = bookingResult;
+        if (typeof bookingResult === 'string') {
+          try {
+            parsedBookingResult = JSON.parse(bookingResult);
+          } catch (error) {
+            console.error('Failed to parse booking result:', error);
+            throw new Error("Invalid booking response format from server");
+          }
+        }
+                
+        if (parsedBookingResult.success) {
           toast({
             title: "Trip Booked!",
             description: `Your ${itinerary.destination} trip has been booked successfully.`,
           });
           loadItineraries(); // Refresh the list
         } else {
-          throw new Error(bookingResult.error || "Failed to create booking");
+          throw new Error(parsedBookingResult.error || "Failed to create booking");
         }
       } else {
-        throw new Error(updateResult.error || "Failed to update itinerary status");
+        throw new Error("Failed to update itinerary status - invalid response format");
       }
     } catch (error) {
       console.error('Failed to book itinerary:', error);
@@ -272,7 +299,7 @@ export default function MyItinerariesPage() {
                     </div>
 
                     <div className="flex gap-2 mt-6">
-                      {itinerary.status === 'saved' && (
+                      {(itinerary.status === 'saved' || itinerary.status === 'draft') && (
                         <Button
                           onClick={() => handleBook(itinerary)}
                           disabled={bookingLoading === itinerary.id}
@@ -282,6 +309,7 @@ export default function MyItinerariesPage() {
                         </Button>
                       )}
 
+                   
                       {itinerary.status === 'booked' && (
                         <div className="flex-1 p-2 bg-green-100 text-green-800 rounded text-center text-sm font-medium">
                           ✅ Booked

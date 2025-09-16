@@ -204,18 +204,24 @@ tools:
       - name: payment_status
         type: string
         description: Payment status (defaults to pending)
+      - name: special_requests
+        type: string
+        description: Special requests or notes (optional)
+      - name: cancellation_policy
+        type: string
+        description: Cancellation policy (optional)
     statement: |
       INSERT INTO hachathonschema.bookings 
         (user_uid, itinerary_id, booking_type, item_id, booking_reference, booking_date, 
-        check_in_date, check_out_date, quantity, unit_price, total_amount, currency, status, payment_status)
+        check_in_date, check_out_date, quantity, unit_price, total_amount, currency, status, payment_status, special_requests, cancellation_policy)
       VALUES ($1, $2, $3, $4, 'BK-' || EXTRACT(EPOCH FROM NOW())::bigint, $5::date, 
-            $6::date, $7::date, $8, $9, $10, $11, $12, $13)
+            $6::date, $7::date, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING *;
 
   update-booking-status:
     kind: postgres-sql
     source: my-cloud-sql-source
-    description: Update the status of a booking
+    description: Update the status and payment status of a booking
     parameters:
       - name: booking_id
         type: integer
@@ -223,9 +229,15 @@ tools:
       - name: status
         type: string
         description: New status (pending, confirmed, cancelled, completed)
+      - name: payment_status
+        type: string
+        description: New payment status (pending, paid, refunded, failed) - optional
+        required: false
     statement: |
       UPDATE hachathonschema.bookings 
-      SET status = $2, updated_at = NOW()
+      SET status = $2,
+          payment_status = COALESCE($3, payment_status),
+          updated_at = NOW()
       WHERE id = $1
       RETURNING *;
 
