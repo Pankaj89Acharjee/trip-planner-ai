@@ -125,7 +125,19 @@ export function ItineraryDisplay({ itinerary, setItinerary, adaptedItinerary, se
             totalCost={itinerary.totalCost}
             itinerary={itinerary.itinerary}
           />
-          <MapView itinerary={itinerary.itinerary} />
+          <MapView 
+            itinerary={itinerary.itinerary}
+            destination={itinerary.destination}
+            interests={itinerary.interests || []}
+            budget={itinerary.budget || 0}
+            onLocationSelect={(location) => {
+              console.log('Location selected:', location);
+            }}
+            onItineraryUpdate={(updatedItinerary) => {
+              console.log('Itinerary updated:', updatedItinerary);
+              // Here you could update the itinerary state if needed
+            }}
+          />
           <DynamicAdjustmentForm
             originalItinerary={itinerary}
             setAdaptedItinerary={setAdaptedItinerary}

@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { askAgent } from "@/lib/agentFunctionCall";
 import { ItineraryDisplay } from "./itinery-display";
+import { MapView } from "./map-view";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState } from "react";
 
@@ -151,10 +152,13 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormVal
 
 
   return (
-    <Card className="shadow-2xl shadow-primary/10">
-      <CardContent className="p-8">
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+    <div className="w-full max-w-6xl mx-auto">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Form Section */}
+        <Card className="shadow-2xl shadow-primary/10">
+          <CardContent className="p-8">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
             <FormField
               control={form.control}
               name="destination"
@@ -341,16 +345,31 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormVal
               )}
             />
 
-            <Button type="submit" size="lg" className="w-full bg-purple-400/90">
-              <Sparkles className="mr-2 h-4 w-4 text-gray-800" />
-              <span className="text-black space-x-2 text-base">Generate My Itinerary</span>
-            </Button>
-          </form>
-        </Form>
+                <Button type="submit" size="lg" className="w-full bg-purple-400/90">
+                  <Sparkles className="mr-2 h-4 w-4 text-gray-800" />
+                  <span className="text-black space-x-2 text-base">Generate My Itinerary</span>
+                </Button>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
 
-        {/* Displaying the Contents when Data received from the MCP server through the Agent */}
-
-      </CardContent>
-    </Card>
+        {/* Map Section */}
+        <div className="space-y-4">
+          <MapView 
+            destination={form.watch("destination")}
+            interests={form.watch("interests") || []}
+            budget={form.watch("budget") || 0}
+            userUid={userData?.uid}
+            onLocationSelect={(location) => {
+              console.log('Location selected:', location);
+            }}
+            onItineraryUpdate={(updatedItinerary) => {
+              console.log('Itinerary updated:', updatedItinerary);
+            }}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
