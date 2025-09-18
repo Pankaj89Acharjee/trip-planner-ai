@@ -71,7 +71,7 @@ const CITY_CENTERS: Record<string, { lat: number; lng: number }> = {
 
 // Utility Function to create unique index for each POI
 const createUniqueId = (prefix: string, index: number): string => {
-  return `${prefix}-${index}-${Math.random().toString(36).substr(2, 9)}`;
+  return `${prefix}-${index}-${Math.random().toString(36).substring(2, 9)}`;
 };
 
 const deduplicateByName = <T extends { name?: string; id?: string }>(items: T[]): T[] => {
@@ -91,7 +91,7 @@ const convertToPOIs = (
   budget: number
 ): POI[] => {
   const pois: POI[] = [];
-  const coordinateSet = new Set<string>(); // Track used coordinates
+ 
 
   // Process hotels - simple and clean
   const uniqueHotels = deduplicateByName(hotels);
@@ -100,14 +100,7 @@ const convertToPOIs = (
 
     const lat = parseFloat(hotel.latitude);
     const lng = parseFloat(hotel.longitude);
-    const coordKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
     
-    // Skip if coordinates already used (avoid overlapping markers)
-    if (coordinateSet.has(coordKey)) {
-      console.log(`Skipping duplicate coordinates for hotel: ${hotel.name}`);
-      return;
-    }
-    coordinateSet.add(coordKey);
 
     pois.push({
       id: hotel.id || createUniqueId('hotel', index),
@@ -129,15 +122,7 @@ const convertToPOIs = (
 
     const lat = parseFloat(activity.latitude);
     const lng = parseFloat(activity.longitude);
-    const coordKey = `${lat.toFixed(6)},${lng.toFixed(6)}`;
     
-    // Skip if coordinates already used (avoid overlapping markers)
-    if (coordinateSet.has(coordKey)) {
-      console.log(`Skipping duplicate coordinates for activity: ${activity.name}`);
-      return;
-    }
-    coordinateSet.add(coordKey);
-
     const typeMap: Record<string, POI['type']> = {
       'heritage': 'heritage',
       'adventure': 'adventure',
@@ -257,7 +242,7 @@ export function DestinationOverviewMap({
   }
 
   return (
-    <Card>
+    <Card className="mt-8">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <MapIcon className="w-5 h-5" />
@@ -279,10 +264,23 @@ export function DestinationOverviewMap({
           <APIProvider apiKey={apiKey}>
             <Map
               center={mapCenter}
-              defaultZoom={12}
+              defaultZoom={13}
+              minZoom={8}
+              maxZoom={20}
               gestureHandling="greedy"
               disableDefaultUI={false}
               mapId="destination_overview_map"
+              clickableIcons={false}
+              keyboardShortcuts={true}
+              mapTypeControl={true}
+              scaleControl={true}
+              streetViewControl={false}
+              rotateControl={false}
+              fullscreenControl={true}
+              zoomControl={true}
+              panControl={true}
+              draggable={true}
+              scrollwheel={true}
             >
               {filteredPOIs.map(poi => (
                 <AdvancedMarker
@@ -290,6 +288,7 @@ export function DestinationOverviewMap({
                   position={{ lat: poi.lat, lng: poi.lng }}
                   title={poi.name}
                   onClick={() => handleLocationSelect(poi)}
+                  clickable={true}
                 >
                   <div className="relative">
                     <Pin

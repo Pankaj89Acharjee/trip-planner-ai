@@ -7,31 +7,123 @@ import { CostSummary } from "./cost-summary";
 import { MapView } from "./map-view";
 import { DynamicAdjustmentForm } from "./dynamic-adjustment";
 import { Button } from "./ui/button";
-import { ArrowLeft, Info, TrendingUp, MapPin, Calendar } from "lucide-react";
+import { ArrowLeft, Info, TrendingUp, MapPin, Calendar, Save, Edit3, Package } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { itinerarySyncService } from "@/lib/itinerarySyncService";
 
 type ItineraryDisplayProps = {
   itinerary: FullItinerary;
   setItinerary: (itinerary: FullItinerary | null) => void;
   adaptedItinerary: AdaptedItinerary | null;
   setAdaptedItinerary: (itinerary: AdaptedItinerary | null) => void;
+  formValues?: any;
+  setFormValues?: (values: any) => void;
 };
 
-export function ItineraryDisplay({ itinerary, setItinerary, adaptedItinerary, setAdaptedItinerary }: ItineraryDisplayProps) {
-  const [bookedItems, setBookedItems] = useState<Set<string>>(new Set());
+export function ItineraryDisplay({
+  itinerary,
+  setItinerary,
+  adaptedItinerary,
+  setAdaptedItinerary,
+  formValues,
+  setFormValues
+}: ItineraryDisplayProps) {
+  const { userData } = useAuth();
+  const { toast } = useToast();
+  const [isSaving, setIsSaving] = useState(false);
+  const [showAdjustmentForm, setShowAdjustmentForm] = useState(false);
+  const [currentItinerary, setCurrentItinerary] = useState<FullItinerary>(itinerary);
 
-  const handleBookItem = (itemId: string) => {
-    setBookedItems((prev) => new Set(prev).add(itemId));
+  // Function to calculate total cost from itinerary data
+  const calculateTotalCost = (itineraryDays: ItineraryDay[]): number => {
+    return itineraryDays.reduce((total, day) => {
+      let dayCost = 0;
+      
+      // Add accommodation cost
+      if (day.accommodation?.costPerNight) {
+        dayCost += day.accommodation.costPerNight;
+      }
+      
+      // Add activities cost
+      if (day.activities) {
+        dayCost += day.activities.reduce((activityTotal, activity) => 
+          activityTotal + (activity.cost || 0), 0);
+      }
+      
+      return total + dayCost;
+    }, 0);
   };
 
   const handleStartOver = () => {
     setItinerary(null);
     setAdaptedItinerary(null);
+    setShowAdjustmentForm(false);
+  };
+
+  const handleSaveItineraryPackage = async () => {
+    if (!userData?.uid || !formValues) {
+      toast({
+        variant: "destructive",
+        title: "Cannot Save",
+        description: "No user data or form values available.",
+      });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Calculate end date from start date and duration
+      const startDate = formValues.startDate || new Date().toISOString().split('T')[0];
+      const duration = formValues.travelDuration || 1;
+      const endDate = new Date(new Date(startDate).getTime() + duration * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      const itineraryData = {
+        userUid: userData.uid,
+        title: `${formValues.destination || 'Generated'} Trip Package`,
+        destination: formValues.destination || 'Generated Destination',
+        itinerary: currentItinerary,
+        status: 'saved' as const,
+        participants: formValues.participants || 1,
+        isFavorite: formValues.isFavorite || false,
+        budget: formValues.budget || 0,
+        preferences: formValues.interests || [],
+        totalDays: formValues.travelDuration || 1,
+        travelDates: {
+          startDate: startDate,
+          endDate: endDate
+        }
+      };
+
+      const result = await itinerarySyncService.saveItinerary(itineraryData);
+     
+      if (result.success) {
+        const hasModifications = JSON.stringify(currentItinerary.itinerary) !== JSON.stringify(itinerary.itinerary);
+        toast({
+          title: "Itinerary Package Saved!",
+          description: hasModifications 
+            ? "Your complete itinerary with modifications has been saved. You can now book it later or make further adjustments."
+            : "Your complete itinerary has been saved. You can now book it later or make adjustments.",
+        });
+      } else {
+        throw new Error(result.error || 'Failed to save itinerary');
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to save itinerary";
+      toast({
+        variant: "destructive",
+        title: "Save Failed",
+        description: errorMessage,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
-    <div className="w-full max-w-8xl ml-4 xl:ml-26 mr-2 container p-2 mx-auto animate-in fade-in duration-500 overflow-auto">
+    <div className="w-full max-w-7xl ml-4 xl:ml-26 mr-4 container p-2 mx-auto animate-in fade-in duration-500 overflow-none">
       <div className="flex gap-4 mb-6">
         <Button variant="ghost" onClick={handleStartOver} className="dark:bg-gray-700 bg-gray-200 hover:bg-gray-300 dark:text-gray-300 text-gray-700">
           <ArrowLeft className="mr-2 h-4 w-4" />
@@ -39,18 +131,50 @@ export function ItineraryDisplay({ itinerary, setItinerary, adaptedItinerary, se
         </Button>
       </div>
 
-      {/* Search Results & Recommendations */}
+      {/* Top Header of the Itinerary Display page */}
+      <Card className="mb-6 bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+        <CardContent className="p-6">
+          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Ready to Save Your Itinerary?</h3>
+              <p className="text-gray-600">Save this complete travel package to your account for future booking and modifications.</p>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => setShowAdjustmentForm(!showAdjustmentForm)}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                <Edit3 className="h-4 w-4" />
+                {showAdjustmentForm ? 'Hide Weather Adjustments' : 'Adapt Weather to Itinerary'}
+              </Button>
+              <Button
+                onClick={handleSaveItineraryPackage}
+                disabled={isSaving}
+                className="bg-green-600 hover:bg-green-700 flex items-center gap-2"
+              >
+                <Package className="h-4 w-4" />
+                {isSaving ? 'Saving...' : 'Save Package'}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Smart Itinerary Insights */}
       {itinerary.metadata && (
         <div className="mb-8 space-y-4 dark:bg-gray-800 dark:border-gray-700">
           <Card className="bg-gradient-accent border-blue-200 dark:bg-gray-800 dark:border-gray-700">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-blue-900 dark:text-gray-200">
                 <Info className="h-5 w-5" />
-                Search Results & Insights
+                Smart Itinerary Insights
               </CardTitle>
             </CardHeader>
+
+            {/* Recommendation section */}
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-6">
                 <div className="text-center p-4 bg-white rounded-lg border border-blue-100 shadow-sm">
                   <div className="text-3xl font-bold text-blue-600 mb-1 dark:text-gray-400">
                     {itinerary.metadata.searchResults.hotelsFound}
@@ -71,7 +195,7 @@ export function ItineraryDisplay({ itinerary, setItinerary, adaptedItinerary, se
                 </div>
                 <div className="text-center p-4 bg-white rounded-lg border border-blue-100 shadow-sm">
                   <div className="text-3xl font-bold text-orange-600 mb-1">
-                    ₹{itinerary.totalCost}
+                    ₹{currentItinerary.totalCost.toLocaleString()}
                   </div>
                   <div className="text-sm text-orange-700 font-medium">Total Cost</div>
                 </div>
@@ -109,40 +233,59 @@ export function ItineraryDisplay({ itinerary, setItinerary, adaptedItinerary, se
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-8 items-start">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-6 items-start">
         <div className="xl:col-span-3 space-y-6">
-          {itinerary.itinerary.map((day: ItineraryDay) => (
+          {currentItinerary.itinerary.map((day: ItineraryDay) => (
             <ItineraryDayCard
               key={day.day}
               day={day}
-              bookedItems={bookedItems}
-              onBookItem={handleBookItem}
+              originalDay={itinerary.itinerary.find(d => d.day === day.day)}
             />
           ))}
         </div>
-        <div className="xl:col-span-1 space-y-6 sticky top-24">
+        <div className="xl:col-span-1 space-y-6 sticky top-24 mr-2">
           <CostSummary
-            totalCost={itinerary.totalCost}
-            itinerary={itinerary.itinerary}
+            totalCost={currentItinerary.totalCost}
+            itinerary={currentItinerary.itinerary}
           />
-          <MapView 
+          <MapView            
             itinerary={itinerary.itinerary}
-            destination={itinerary.destination}
-            interests={itinerary.interests || []}
-            budget={itinerary.budget || 0}
+            destination={formValues?.destination || 'Generated Destination'}
+            interests={formValues?.interests || []}
+            budget={formValues?.budget || 0}
+            userUid={userData?.uid}
             onLocationSelect={(location) => {
               console.log('Location selected:', location);
             }}
             onItineraryUpdate={(updatedItinerary) => {
               console.log('Itinerary updated:', updatedItinerary);
-              // Here you could update the itinerary state if needed
+              // Recalculate total cost based on updated itinerary
+              const newTotalCost = calculateTotalCost(updatedItinerary);
+              
+              // Update the current itinerary with user modifications and new total cost
+              const updatedFullItinerary = {
+                ...currentItinerary,
+                itinerary: updatedItinerary,
+                totalCost: newTotalCost
+              };
+              setCurrentItinerary(updatedFullItinerary);
+              setItinerary(updatedFullItinerary);
+              
+              toast({
+                title: "Itinerary Updated",
+                description: `Your itinerary has been updated. New total cost: ₹${newTotalCost.toLocaleString()}`,
+              });
             }}
           />
-          <DynamicAdjustmentForm
-            originalItinerary={itinerary}
-            setAdaptedItinerary={setAdaptedItinerary}
-            adaptedItinerary={adaptedItinerary}
-          />
+
+          {/* Dynamic adjustment according to weather */}
+          {showAdjustmentForm && (
+            <DynamicAdjustmentForm
+              originalItinerary={itinerary}
+              setAdaptedItinerary={setAdaptedItinerary}
+              adaptedItinerary={adaptedItinerary}
+            />
+          )}
         </div>
       </div>
     </div>

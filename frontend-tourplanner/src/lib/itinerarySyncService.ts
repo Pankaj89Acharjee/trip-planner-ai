@@ -83,8 +83,8 @@ class ItinerarySyncService {
             }
 
             const result = await response.json();
-            console.log('Save itinerary result:', result);
-            return result;
+            //console.log('Save itinerary result:', result);
+            return {success: response.ok, data: result};
         } catch (error) {
             console.error('Error saving itinerary to PostgreSQL:', error);
             throw error;

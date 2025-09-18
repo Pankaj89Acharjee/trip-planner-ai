@@ -15,6 +15,7 @@ export default function Home() {
     useState<AdaptedItinerary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [formValues, setFormValues] = useState<any>(null);
 
 
 
@@ -38,6 +39,7 @@ export default function Home() {
                 setIsLoading={setIsLoading}
                 setError={setError}
                 setAdaptedItinerary={setAdaptedItinerary}
+                setFormValues={setFormValues}
               />
             </div>
           )}
@@ -63,6 +65,8 @@ export default function Home() {
               setItinerary={setItinerary}
               adaptedItinerary={adaptedItinerary}
               setAdaptedItinerary={setAdaptedItinerary}
+              formValues={formValues}
+              setFormValues={setFormValues}
             />
           )}
         </div>

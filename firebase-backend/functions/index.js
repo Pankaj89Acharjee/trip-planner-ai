@@ -49,57 +49,8 @@ exports.agentAPI = functions.https.onRequest(async (req, res) => {
                 }
 
                 console.log('Running agent with question:', question);
-                console.log('Form data received:', formData);
                 const result = await runAgent(question);
                 console.log("result from vertex ai is", result)
-                // Auto-saving the generated itinerary if userUid is provided
-                if (userUid && result) {
-                    try {
-                        // Parsing the result to extract itinerary data
-                        let jsonString = result;
-                        if (jsonString?.includes('```json')) {
-                            jsonString = jsonString.replace(/```json\s*/, '').replace(/\s*```/, '');
-                        } else if (jsonString?.includes('```')) {
-                            jsonString = jsonString.replace(/```\s*/, '').replace(/\s*```/, '');
-                        }
-
-                        const itineraryData = JSON.parse(jsonString || '{}');
-
-                        if (itineraryData.itinerary && itineraryData.totalCost) {
-                            const parsedFormData = formData || {};
-
-                            // Calculate end date from start date and duration
-                            const startDate = parsedFormData.startDate || new Date().toISOString().split('T')[0];
-                            const duration = parsedFormData.travelDuration || 1;
-                            const endDate = new Date(new Date(startDate).getTime() + duration * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-                            // Auto-save to PostgreSQL with enhanced form data
-                            const saveResult = await itineraryDatabaseAgent('save', {
-                                itineraryData: {
-                                    userUid: userUid,
-                                    title: `${parsedFormData.destination || 'Generated'} Trip`,
-                                    destination: parsedFormData.destination || 'Generated Destination',
-                                    itinerary: itineraryData,
-                                    status: 'draft',
-                                    participants: parsedFormData.participants || 1,
-                                    isFavorite: parsedFormData.isFavorite || false,
-                                    budget: parsedFormData.budget || 0,
-                                    preferences: parsedFormData.interests || [],
-                                    totalDays: parsedFormData.travelDuration || 1,
-                                    travelDates: {
-                                        startDate: startDate,
-                                        endDate: endDate
-                                    }
-                                }
-                            });
-
-                            console.log('Auto-saved itinerary:', saveResult);
-                        }
-                    } catch (saveError) {
-                        console.error('Failed to auto-save itinerary:', saveError);
-                        // Don't fail the main request if auto-save fails
-                    }
-                }
 
                 res.json({ answer: result });
 

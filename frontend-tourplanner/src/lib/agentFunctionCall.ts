@@ -3,7 +3,22 @@ export type AgentResponse = {
   error?: string;
 };
 
-export async function askAgent(question: string, userUid?: string, formData?: any): Promise<AgentResponse> {
+// Debounced version of askAgent to prevent excessive API calls
+let debounceTimer: NodeJS.Timeout | null = null;
+export async function askAgentDebounced(question: string, delay: number = 5000): Promise<AgentResponse> {
+  return new Promise((resolve) => {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+    
+    debounceTimer = setTimeout(async () => {
+      const result = await askAgent(question);
+      resolve(result);
+    }, delay);
+  });
+}
+
+export async function askAgent(question: string): Promise<AgentResponse> {
   const url = process.env.NEXT_PUBLIC_AGENT_URL || "https://agentapi-clzbcargga-uc.a.run.app";
   //const url = process.env.NEXT_PUBLIC_LOCAL_AGENT_URL;
   
@@ -16,16 +31,6 @@ export async function askAgent(question: string, userUid?: string, formData?: an
       question,
       action: 'generate' 
     };
-    
-    // Adding userUid for itinerary auto-saving functionality
-    if (userUid) {
-      requestBody.userUid = userUid;
-    }
-    
-    // Adding form data for auto-saving
-    if (formData) {
-      requestBody.formData = formData;
-    }
 
     const res = await fetch(url, {
       method: "POST",

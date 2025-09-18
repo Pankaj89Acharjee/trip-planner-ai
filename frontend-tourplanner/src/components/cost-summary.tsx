@@ -87,8 +87,8 @@ export function CostSummary({ totalCost, itinerary }: CostSummaryProps) {
         </div>
       </CardContent>
       <CardFooter>
-        <Button className="w-full" variant="outline" onClick={handleShare}>
-          <Share2 className="mr-2 h-4 w-4" /> Share Itinerary
+        <Button className="w-full bg-purple-700/90 text-white" variant="outline" onClick={handleShare}>
+          <Share2 className="mr-2 h-4 w-4  text-white" /> Share Itinerary
         </Button>
       </CardFooter>
     </Card>

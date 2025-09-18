@@ -98,7 +98,7 @@ export default function MyItinerariesPage() {
       const updateResult = await itinerarySyncService.updateItineraryStatus(itinerary.id, 'booked');
 
       
-      // Parse the response if it's a string
+      // Parsing the response if it's a string
       let parsedResult = updateResult;
       if (typeof updateResult === 'string') {
         try {
@@ -116,7 +116,7 @@ export default function MyItinerariesPage() {
       if (isUpdateSuccessful) {
         // Create a booking record for the entire itinerary
         const bookingData = createBookingData(
-          userData?.uid || '', // Use Firebase UID directly
+          userData?.uid || '', // Firebase UID
           itinerary.id,
           'package',
           1, // Placeholder item ID for package booking

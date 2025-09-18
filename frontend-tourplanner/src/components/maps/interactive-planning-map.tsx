@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { MapIcon, Plus, Trash2, Save, RotateCcw, Navigation, Clock, DollarSign } from "lucide-react";
 import { useMemo, useState, useCallback } from "react";
 import type { ItineraryDay } from "@/lib/interfaces";
+import { useToast } from "@/hooks/use-toast";
 
 interface CustomLocation {
   id: string;
@@ -30,7 +31,7 @@ interface InteractivePlanningMapProps {
 const getDayColor = (day: number) => {
   const colors = [
     'bg-red-500',
-    'bg-blue-500', 
+    'bg-blue-500',
     'bg-green-500',
     'bg-yellow-500',
     'bg-purple-500',
@@ -43,6 +44,7 @@ const getDayColor = (day: number) => {
 
 export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: InteractivePlanningMapProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const { toast } = useToast();
   const [customLocations, setCustomLocations] = useState<CustomLocation[]>([]);
   const [selectedDay, setSelectedDay] = useState<number>(1);
   const [isAddingLocation, setIsAddingLocation] = useState(false);
@@ -124,38 +126,42 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
   }, [allLocations]);
 
   const handleMapClick = useCallback((event: any) => {
-    if (isAddingLocation) {
-      const lat = event.detail.latLng.lat;
-      const lng = event.detail.latLng.lng;
-      
-      const newCustomLocation: CustomLocation = {
-        id: `custom-${Date.now()}`,
-        name: newLocation.name || `Custom ${newLocation.type}`,
-        lat,
-        lng,
-        day: selectedDay,
-        type: newLocation.type,
-        cost: newLocation.cost,
-        duration: newLocation.duration,
-        notes: newLocation.notes
-      };
+    // Only handle clicks when we're in adding mode and it's a valid click event
+    if (isAddingLocation && event.detail && event.detail.latLng) {
+      // Add a small delay to ensure it's not a drag end event
+      setTimeout(() => {
+        const lat = event.detail.latLng.lat;
+        const lng = event.detail.latLng.lng;
 
-      setCustomLocations(prev => [...prev, newCustomLocation]);
-      setIsAddingLocation(false);
-      setNewLocation({
-        name: '',
-        type: 'activity',
-        cost: 0,
-        duration: '',
-        notes: ''
-      });
+        const newCustomLocation: CustomLocation = {
+          id: `custom-${Date.now()}`,
+          name: newLocation.name || `Custom ${newLocation.type}`,
+          lat,
+          lng,
+          day: selectedDay,
+          type: newLocation.type,
+          cost: newLocation.cost,
+          duration: newLocation.duration,
+          notes: newLocation.notes
+        };
+
+        setCustomLocations(prev => [...prev, newCustomLocation]);
+        setIsAddingLocation(false);
+        setNewLocation({
+          name: '',
+          type: 'activity',
+          cost: 0,
+          duration: '',
+          notes: ''
+        });
+      }, 50);
     }
   }, [isAddingLocation, newLocation, selectedDay]);
 
   const handleLocationDrag = useCallback((locationId: string, newLat: number, newLng: number) => {
-    setCustomLocations(prev => 
-      prev.map(loc => 
-        loc.id === locationId 
+    setCustomLocations(prev =>
+      prev.map(loc =>
+        loc.id === locationId
           ? { ...loc, lat: newLat, lng: newLng }
           : loc
       )
@@ -167,9 +173,9 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
   }, []);
 
   const handleMoveToDay = useCallback((locationId: string, newDay: number) => {
-    setCustomLocations(prev => 
-      prev.map(loc => 
-        loc.id === locationId 
+    setCustomLocations(prev =>
+      prev.map(loc =>
+        loc.id === locationId
           ? { ...loc, day: newDay }
           : loc
       )
@@ -177,15 +183,96 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
   }, []);
 
   const handleSaveChanges = useCallback(() => {
-    // Here you would typically send the updated itinerary to your backend
-    // For now, we'll just call the callback with the current state
-    onItineraryUpdate?.(itinerary);
-  }, [itinerary, onItineraryUpdate]);
+    console.log('Saving changes with custom locations:', customLocations);
+    
+    // Merge custom locations with the original itinerary
+    const updatedItinerary = itinerary.map(day => {
+      const dayCustomLocations = customLocations.filter(loc => loc.day === day.day);
+      
+      // Add custom hotels to accommodation
+      const customHotels = dayCustomLocations.filter(loc => loc.type === 'hotel');
+      const customActivities = dayCustomLocations.filter(loc => loc.type === 'activity');
+      
+      return {
+        ...day,
+        // If there are custom hotels, replace the accommodation
+        ...(customHotels.length > 0 && {
+          accommodation: {
+            name: customHotels[0].name,
+            description: customHotels[0].notes || `Custom ${customHotels[0].name}`,
+            costPerNight: customHotels[0].cost || 0,
+            location: {
+              latitude: customHotels[0].lat,
+              longitude: customHotels[0].lng
+            }
+          }
+        }),
+        // Add custom activities to the existing activities
+        activities: [
+          ...(day.activities || []),
+          ...customActivities.map(activity => ({
+            name: activity.name,
+            description: activity.notes || `Custom ${activity.name}`,
+            cost: activity.cost || 0,
+            duration: parseInt(activity.duration || '1'),
+            location: {
+              latitude: activity.lat,
+              longitude: activity.lng
+            }
+          }))
+        ]
+      };
+    });
+    
+    console.log('Updated itinerary:', updatedItinerary);
+    onItineraryUpdate?.(updatedItinerary);
+    
+    toast({
+      title: "Changes Applied",
+      description: `Updated itinerary with ${customLocations.length} custom locations. Click 'Save Itinerary' to save to your list.`,
+    });
+  }, [itinerary, customLocations, onItineraryUpdate, toast]);
 
   const handleReset = useCallback(() => {
     setCustomLocations([]);
     setIsAddingLocation(false);
   }, []);
+
+  const handleAddNewDay = useCallback(() => {
+    const maxDay = Math.max(...itinerary.map(d => d.day));
+    const newDayNumber = maxDay + 1;
+    
+    // Create a new empty day
+    const newDay: ItineraryDay = {
+      day: newDayNumber,
+      accommodation: undefined,
+      activities: []
+    };
+
+    // Update the itinerary with the new day
+    const updatedItinerary = [...itinerary, newDay];
+    
+    // Call the parent callback to update the itinerary
+    if (onItineraryUpdate) {
+      onItineraryUpdate(updatedItinerary);
+    }
+
+    // Set the new day as selected
+    setSelectedDay(newDayNumber);
+
+    toast({
+      title: "New Day Added",
+      description: `Day ${newDayNumber} has been added to your itinerary.`,
+    });
+  }, [itinerary, onItineraryUpdate, toast]);
+
+  const mapContainerStyle = {
+    height: '384px',
+    width: '100%',
+    borderRadius: '0.5rem',
+    overflow: 'hidden',
+    cursor: isAddingLocation ? 'crosshair' : 'default'
+  };
 
   if (!apiKey) {
     return (
@@ -213,7 +300,7 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
         <CardDescription>
           Drag locations, add new spots, and customize your itinerary
         </CardDescription>
-        
+
         {/* Controls */}
         <div className="flex flex-wrap gap-2 mt-3">
           <Button
@@ -224,8 +311,14 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
             <Plus className="w-4 h-4 mr-1" />
             {isAddingLocation ? 'Cancel' : 'Add Location'}
           </Button>
-          
-          <Select value={selectedDay.toString()} onValueChange={(value) => setSelectedDay(parseInt(value))}>
+
+          <Select value={selectedDay.toString()} onValueChange={(value) => {
+            if (value === "new") {
+              handleAddNewDay();
+            } else {
+              setSelectedDay(parseInt(value));
+            }
+          }}>
             <SelectTrigger className="w-32">
               <SelectValue />
             </SelectTrigger>
@@ -235,6 +328,10 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
                   Day {day.day}
                 </SelectItem>
               ))}
+              {/* Add option to create new day */}
+              <SelectItem value="new" className="text-blue-600 font-medium">
+                + Add New Day
+              </SelectItem>
             </SelectContent>
           </Select>
 
@@ -242,7 +339,7 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
             <Save className="w-4 h-4 mr-1" />
             Save
           </Button>
-          
+
           <Button variant="outline" size="sm" onClick={handleReset}>
             <RotateCcw className="w-4 h-4 mr-1" />
             Reset
@@ -259,7 +356,7 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
                 value={newLocation.name}
                 onChange={(e) => setNewLocation(prev => ({ ...prev, name: e.target.value }))}
               />
-              <Select value={newLocation.type} onValueChange={(value: 'hotel' | 'activity') => 
+              <Select value={newLocation.type} onValueChange={(value: 'hotel' | 'activity') =>
                 setNewLocation(prev => ({ ...prev, type: value }))
               }>
                 <SelectTrigger>
@@ -289,32 +386,45 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
         )}
       </CardHeader>
       <CardContent>
-        <div className="h-96 w-full rounded-lg overflow-hidden mb-4">
+        <div style={mapContainerStyle} className="mb-4">
           <APIProvider apiKey={apiKey}>
             <Map
               center={mapCenter}
               defaultZoom={13}
-              gestureHandling="greedy"
+              minZoom={8}
+              maxZoom={20}
+              gestureHandling="auto"
               disableDefaultUI={false}
               mapId="interactive_planning_map"
-              onClick={handleMapClick}
+              clickableIcons={false}
+              keyboardShortcuts={true}
+              mapTypeControl={false}
+              scaleControl={true}
+              streetViewControl={false}
+              rotateControl={false}
+              fullscreenControl={true}
+              zoomControl={true}
+              // Only add onClick when in adding mode
+              {...(isAddingLocation && { onClick: handleMapClick })}
+              style={{ width: '100%', height: '100%' }}
             >
               {allLocations.map(loc => (
-                <AdvancedMarker 
-                  key={loc.id} 
+                <AdvancedMarker
+                  key={loc.id}
                   position={{ lat: loc.lat, lng: loc.lng }}
                   title={`Day ${loc.day}: ${loc.name}`}
                   draggable={loc.isCustom}
                   onDragEnd={(event) => {
-                    if (loc.isCustom && event.detail.latLng) {
-                      handleLocationDrag(loc.id, event.detail.latLng.lat, event.detail.latLng.lng);
+                    if (loc.isCustom && event.latLng) {
+                      // Extract the original custom location ID (remove 'custom-' prefix)
+                      const customLocationId = loc.id.replace('custom-', '');
+                      handleLocationDrag(customLocationId, event.latLng.lat(), event.latLng.lng());
                     }
                   }}
                 >
                   <div className="relative">
-                    <div className={`w-8 h-8 rounded-full border-2 border-white shadow-lg flex items-center justify-center ${
-                      loc.isCustom ? 'ring-2 ring-blue-400' : ''
-                    } ${getDayColor(loc.day)}`}>
+                    <div className={`w-8 h-8 rounded-full border-2 border-white shadow-lg flex items-center justify-center ${loc.isCustom ? 'ring-2 ring-blue-400' : ''
+                      } ${getDayColor(loc.day)}`}>
                       {loc.type === 'hotel' ? (
                         <div className="w-4 h-4 bg-white rounded-sm"></div>
                       ) : (
@@ -331,6 +441,31 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
               ))}
             </Map>
           </APIProvider>
+        </div>
+
+        {/* Legend */}
+        <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <h4 className="font-semibold text-sm mb-2">Legend</h4>
+          <div className="flex flex-wrap gap-4 text-xs">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-white border-2 border-gray-400 rounded-sm"></div>
+              <span>Hotel</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+              <span>Activity</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-blue-400 rounded-full ring-2 ring-blue-200"></div>
+              <span>Custom Location</span>
+            </div>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            {isAddingLocation
+              ? "Click anywhere on the map to add a new location"
+              : "Click 'Add Location' to start adding custom spots. Drag blue-ringed custom locations to move them."
+            }
+          </p>
         </div>
 
         {/* Custom Locations List */}
@@ -351,7 +486,7 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
                       </Badge>
                     </div>
                     <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
-                      {loc.cost > 0 && (
+                      {loc.cost && loc.cost > 0 && (
                         <div className="flex items-center gap-1">
                           <DollarSign className="w-3 h-3" />
                           <span>₹{loc.cost}</span>
@@ -364,9 +499,12 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
                         </div>
                       )}
                     </div>
+                    {loc.notes && (
+                      <p className="text-xs text-gray-500 mt-1">{loc.notes}</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
-                    <Select value={loc.day.toString()} onValueChange={(value) => 
+                    <Select value={loc.day.toString()} onValueChange={(value) =>
                       handleMoveToDay(loc.id, parseInt(value))
                     }>
                       <SelectTrigger className="w-20 h-8">
@@ -375,7 +513,7 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
                       <SelectContent>
                         {itinerary.map(day => (
                           <SelectItem key={day.day} value={day.day.toString()}>
-                            {day.day}
+                            Day {day.day}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -398,4 +536,3 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
     </Card>
   );
 }
-

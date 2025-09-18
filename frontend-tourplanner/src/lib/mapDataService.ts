@@ -1,4 +1,4 @@
-import { askAgent } from './agentFunctionCall';
+import { askAgent, askAgentDebounced } from './agentFunctionCall';
 
 export interface MapLocation {
   id: string;
@@ -38,7 +38,7 @@ export class MapDataService {
         searchType: 'map_data'
       };
 
-      const response = await askAgent(question, userUid, formData);
+      const response = await askAgentDebounced(question, 5000);
       
       // Parse the response to extract hotels and activities
       let parsedResponse;

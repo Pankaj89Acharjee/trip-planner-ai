@@ -1,12 +1,7 @@
 "use client";
 
 import type { Activity, Accommodation, Transportation } from "@/lib/interfaces";
-import { BedDouble, Bike, Bus, Car, CheckCircle2, Clock, Landmark, PartyPopper, Plane, Sparkles, Train, Wallet } from "lucide-react";
-import { Button } from "./ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { DialogDescription } from "@radix-ui/react-dialog";
-import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { BedDouble, Bike, Bus, Car, Clock, Landmark, PartyPopper, Plane, Sparkles, Train, Wallet } from "lucide-react";
 
 type ItemType = "activity" | "accommodation" | "transportation";
 
@@ -15,8 +10,6 @@ type ItineraryItemCardProps = {
   type: ItemType;
   day: number;
   index?: number;
-  isBooked: boolean;
-  onBook: () => void;
 };
 
 const getIcon = (type: ItemType, item: any) => {
@@ -42,12 +35,7 @@ const getIcon = (type: ItemType, item: any) => {
 export function ItineraryItemCard({
   item,
   type,
-  isBooked,
-  onBook,
 }: ItineraryItemCardProps) {
-  const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-
   const cost =
     "cost" in item
       ? item.cost
@@ -55,15 +43,6 @@ export function ItineraryItemCard({
         ? item.costPerNight
         : 0;
   const duration = "duration" in item ? item.duration : null;
-
-  const handlePayment = () => {
-    onBook();
-    setOpen(false);
-    toast({
-      title: "Booking Confirmed!",
-      description: `${'name' in item ? item.name : item.mode || 'Item'} has been successfully booked.`,
-    });
-  };
 
   return (
     <div className="flex items-start gap-4 p-4 rounded-lg bg-card/50 border">
@@ -87,35 +66,6 @@ export function ItineraryItemCard({
             </div>
           )}
         </div>
-      </div>
-      <div className="ml-auto flex-shrink-0">
-        {isBooked ? (
-          <Button variant="ghost" disabled className="text-green-500">
-            <CheckCircle2 className="mr-2 h-4 w-4" />
-            Booked
-          </Button>
-        ) : (
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline">Book Now</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Confirm Your Booking</DialogTitle>
-                <DialogDescription>
-                  You are about to book "{'name' in item ? item.name : item.mode}" for ₹
-                  {cost.toLocaleString()}.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="ghost" onClick={() => setOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handlePayment}>Pay Now</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
       </div>
     </div>
   );

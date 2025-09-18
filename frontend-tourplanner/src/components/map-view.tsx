@@ -13,14 +13,7 @@ type MapViewProps = {
   onItineraryUpdate?: (updatedItinerary: ItineraryDay[]) => void;
 };
 
-export function MapView({ 
-  itinerary, 
-  destination, 
-  interests = [], 
-  budget = 0,
-  userUid,
-  onLocationSelect,
-  onItineraryUpdate 
+export function MapView({ itinerary, destination, interests = [], budget = 0, userUid, onLocationSelect, onItineraryUpdate
 }: MapViewProps) {
   return (
     <ComprehensiveMap

@@ -14,23 +14,16 @@ interface ComprehensiveMapProps {
   interests?: string[];
   budget?: number;
   userUid?: string;
-  
+
   // For itinerary visualization and planning
   itinerary?: ItineraryDay[];
-  
+
   // Callbacks
   onLocationSelect?: (location: any) => void;
   onItineraryUpdate?: (updatedItinerary: ItineraryDay[]) => void;
 }
 
-export function ComprehensiveMap({
-  destination,
-  interests = [],
-  budget = 0,
-  userUid,
-  itinerary = [],
-  onLocationSelect,
-  onItineraryUpdate
+export function ComprehensiveMap({ destination, interests = [], budget = 0, userUid, itinerary = [], onLocationSelect, onItineraryUpdate
 }: ComprehensiveMapProps) {
   const [activeTab, setActiveTab] = useState("overview");
   const [mapData, setMapData] = useState<MapDataResponse>({
@@ -39,24 +32,29 @@ export function ComprehensiveMap({
     isLoading: false
   });
 
-  // Fetch dynamic data when destination, interests, or budget changes
+  // Fetch dynamic data when destination, interests, or budget changes (with debouncing)
   useEffect(() => {
     if (destination && interests.length > 0 && budget > 0 && userUid) {
       setMapData(prev => ({ ...prev, isLoading: true }));
-      
-      MapDataService.fetchLocationData(destination, interests, budget, userUid)
-        .then(data => {
-          setMapData(data);
-        })
-        .catch(error => {
-          console.error('Error fetching map data:', error);
-          setMapData({
-            hotels: [],
-            activities: [],
-            isLoading: false,
-            error: error.message
+
+      // Debounce the API call to prevent excessive requests
+      const timeoutId = setTimeout(() => {
+        MapDataService.fetchLocationData(destination, interests, budget, userUid)
+          .then(data => {
+            setMapData(data);
+          })
+          .catch(error => {
+            console.error('Error fetching map data:', error);
+            setMapData({
+              hotels: [],
+              activities: [],
+              isLoading: false,
+              error: error.message
+            });
           });
-        });
+      }, 2000); 
+
+      return () => clearTimeout(timeoutId);
     }
   }, [destination, interests, budget, userUid]);
 
@@ -67,23 +65,44 @@ export function ComprehensiveMap({
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-      <TabsList className="grid w-full grid-cols-3">
+      <div className="flex flex-col w-full gap-2 mb-6 ">
         {showOverview && (
-          <TabsTrigger value="overview" className="text-sm">
+          <button
+            onClick={() => setActiveTab("overview")}
+            className={`px-4 py-2 text-sm rounded-md border transition-colors ${
+              activeTab === "overview" 
+                ? "bg-primary text-primary-foreground border-primary" 
+                : "bg-background border-border hover:bg-muted"
+            }`}
+          >
             Destination Overview
-          </TabsTrigger>
+          </button>
         )}
         {showVisualization && (
-          <TabsTrigger value="visualization" className="text-sm">
+          <button
+            onClick={() => setActiveTab("visualization")}
+            className={`px-4 py-2 text-sm rounded-md border transition-colors ${
+              activeTab === "visualization" 
+                ? "bg-primary text-primary-foreground border-primary" 
+                : "bg-background border-border hover:bg-muted"
+            }`}
+          >
             Trip Route
-          </TabsTrigger>
+          </button>
         )}
         {showPlanning && (
-          <TabsTrigger value="planning" className="text-sm">
+          <button
+            onClick={() => setActiveTab("planning")}
+            className={`px-4 py-2 text-sm rounded-md border transition-colors ${
+              activeTab === "planning" 
+                ? "bg-primary text-primary-foreground border-primary" 
+                : "bg-background border-border hover:bg-muted"
+            }`}
+          >
             Interactive Planning
-          </TabsTrigger>
+          </button>
         )}
-      </TabsList>
+      </div>
 
       {showOverview && (
         <TabsContent value="overview" className="mt-4">
