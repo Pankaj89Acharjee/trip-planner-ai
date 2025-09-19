@@ -58,10 +58,6 @@ type ItineraryFormProps = {
 export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormValues }: ItineraryFormProps) {
   const { toast } = useToast();
   const { userData } = useAuth();
-  const [currentItinerary, setCurrentItinerary] = useState<FullItinerary | null>(null);
-  const [currentFormValues, setCurrentFormValues] = useState<any>(null);
-
-
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -86,7 +82,7 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormVal
       // Question passing to the AI agent
       const question = `Generate a personalized travel itinerary for ${values.destination} with a total budget of ₹${values.budget} for ${values.travelDuration} days for ${values.participants} participants. This is the TOTAL budget for the entire trip, not per day. Interests: ${values.interests.join(', ')}. Start date: ${values.startDate}. Please find accommodation and activities within this total budget.`;
 
-      // Use Firebase UID directly - no mapping needed!
+      
       const result = await askAgent(question);
 
       console.log("Receive Itenery from Agent", result.answer)
@@ -135,10 +131,6 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormVal
       // Set loading to false first, then set itinerary
       setIsLoading(false);
       setItinerary(itineraryData);
-      
-      // Store locally for manual save
-      setCurrentItinerary(itineraryData);
-      setCurrentFormValues(values);
 
       // Save form values for saving itinerary
       if (setFormValues) {
@@ -374,15 +366,6 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormVal
             }}
             onItineraryUpdate={(updatedItinerary) => {
               console.log('Itinerary updated:', updatedItinerary);
-              // Update the current itinerary with changes from the map
-              if (currentItinerary) {
-                const updatedFullItinerary = {
-                  ...currentItinerary,
-                  itinerary: updatedItinerary
-                };
-                setCurrentItinerary(updatedFullItinerary);
-                setItinerary(updatedFullItinerary);
-              }
             }}
           />
         </div>

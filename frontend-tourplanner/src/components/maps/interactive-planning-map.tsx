@@ -6,7 +6,7 @@ import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { MapIcon, Plus, Trash2, Save, RotateCcw, Navigation, Clock, DollarSign } from "lucide-react";
+import { MapIcon, Plus, Trash2, Save, RotateCcw, Navigation, Clock, Edit3, IndianRupee } from "lucide-react";
 import { useMemo, useState, useCallback } from "react";
 import type { ItineraryDay } from "@/lib/interfaces";
 import { useToast } from "@/hooks/use-toast";
@@ -48,6 +48,8 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
   const [customLocations, setCustomLocations] = useState<CustomLocation[]>([]);
   const [selectedDay, setSelectedDay] = useState<number>(1);
   const [isAddingLocation, setIsAddingLocation] = useState(false);
+  const [isReplacingActivity, setIsReplacingActivity] = useState(false);
+  const [selectedActivityForReplacement, setSelectedActivityForReplacement] = useState<any>(null);
   const [newLocation, setNewLocation] = useState({
     name: '',
     type: 'activity' as 'hotel' | 'activity',
@@ -127,26 +129,69 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
 
   const handleMapClick = useCallback((event: any) => {
     // Only handle clicks when we're in adding mode and it's a valid click event
-    if (isAddingLocation && event.detail && event.detail.latLng) {
-      // Add a small delay to ensure it's not a drag end event
+    if ((isAddingLocation || isReplacingActivity) && event.detail && event.detail.latLng) {
+      // a small delay to ensure it's not a drag end event
       setTimeout(() => {
         const lat = event.detail.latLng.lat;
         const lng = event.detail.latLng.lng;
 
-        const newCustomLocation: CustomLocation = {
-          id: `custom-${Date.now()}`,
-          name: newLocation.name || `Custom ${newLocation.type}`,
-          lat,
-          lng,
-          day: selectedDay,
-          type: newLocation.type,
-          cost: newLocation.cost,
-          duration: newLocation.duration,
-          notes: newLocation.notes
-        };
+        if (isReplacingActivity && selectedActivityForReplacement) {
+          // Replace existing activity
+          const updatedItinerary = itinerary.map(day => {
+            if (day.day === selectedActivityForReplacement.day) {
+              const updatedActivities = day.activities?.map(activity => {
+                if (activity.name === selectedActivityForReplacement.name) {
+                  return {
+                    ...activity,
+                    name: newLocation.name || `New ${activity.name}`,
+                    description: newLocation.notes || `Replaced ${activity.name}`,
+                    cost: newLocation.cost || activity.cost,
+                    duration: parseInt(newLocation.duration || '1') || activity.duration,
+                    location: {
+                      latitude: lat,
+                      longitude: lng
+                    }
+                  };
+                }
+                return activity;
+              }) || [];
 
-        setCustomLocations(prev => [...prev, newCustomLocation]);
-        setIsAddingLocation(false);
+              return {
+                ...day,
+                activities: updatedActivities
+              };
+            }
+            return day;
+          });
+
+          onItineraryUpdate?.(updatedItinerary);
+          setIsReplacingActivity(false);
+          setSelectedActivityForReplacement(null);
+
+          toast({
+            variant: "success",
+            title: "Activity Replaced",
+            description: `Successfully replaced ${selectedActivityForReplacement.name} with ${newLocation.name || 'new location'}.`,
+          });
+        } else if (isAddingLocation) {
+          // Add new location
+          const newCustomLocation: CustomLocation = {
+            id: `custom-${Date.now()}`,
+            name: newLocation.name || `Custom ${newLocation.type}`,
+            lat,
+            lng,
+            day: selectedDay,
+            type: newLocation.type,
+            cost: newLocation.cost,
+            duration: newLocation.duration,
+            notes: newLocation.notes
+          };
+
+          setCustomLocations(prev => [...prev, newCustomLocation]);
+          setIsAddingLocation(false);
+        }
+
+        // Reset form
         setNewLocation({
           name: '',
           type: 'activity',
@@ -156,7 +201,7 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
         });
       }, 50);
     }
-  }, [isAddingLocation, newLocation, selectedDay]);
+  }, [isAddingLocation, isReplacingActivity, newLocation, selectedDay, selectedActivityForReplacement, itinerary, onItineraryUpdate, toast]);
 
   const handleLocationDrag = useCallback((locationId: string, newLat: number, newLng: number) => {
     setCustomLocations(prev =>
@@ -183,17 +228,15 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
   }, []);
 
   const handleSaveChanges = useCallback(() => {
-    console.log('Saving changes with custom locations:', customLocations);
-    
-    // Merge custom locations with the original itinerary
+    // Merge custom locations with the current itinerary
     const updatedItinerary = itinerary.map(day => {
       const dayCustomLocations = customLocations.filter(loc => loc.day === day.day);
-      
+
       // Add custom hotels to accommodation
       const customHotels = dayCustomLocations.filter(loc => loc.type === 'hotel');
       const customActivities = dayCustomLocations.filter(loc => loc.type === 'activity');
-      
-      return {
+
+      const updatedDay = {
         ...day,
         // If there are custom hotels, replace the accommodation
         ...(customHotels.length > 0 && {
@@ -222,14 +265,16 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
           }))
         ]
       };
+      return updatedDay;
     });
-    
-    console.log('Updated itinerary:', updatedItinerary);
+
+    //Final itinery updating 
     onItineraryUpdate?.(updatedItinerary);
-    
+
     toast({
+      variant: "success",
       title: "Changes Applied",
-      description: `Updated itinerary with ${customLocations.length} custom locations. Click 'Save Itinerary' to save to your list.`,
+      description: `Updated itinerary with ${customLocations.length} custom locations. The itinerary has been modified successfully.`,
     });
   }, [itinerary, customLocations, onItineraryUpdate, toast]);
 
@@ -241,7 +286,7 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
   const handleAddNewDay = useCallback(() => {
     const maxDay = Math.max(...itinerary.map(d => d.day));
     const newDayNumber = maxDay + 1;
-    
+
     // Create a new empty day
     const newDay: ItineraryDay = {
       day: newDayNumber,
@@ -251,7 +296,7 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
 
     // Update the itinerary with the new day
     const updatedItinerary = [...itinerary, newDay];
-    
+
     // Call the parent callback to update the itinerary
     if (onItineraryUpdate) {
       onItineraryUpdate(updatedItinerary);
@@ -261,6 +306,7 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
     setSelectedDay(newDayNumber);
 
     toast({
+      variant: "success",
       title: "New Day Added",
       description: `Day ${newDayNumber} has been added to your itinerary.`,
     });
@@ -271,7 +317,7 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
     width: '100%',
     borderRadius: '0.5rem',
     overflow: 'hidden',
-    cursor: isAddingLocation ? 'crosshair' : 'default'
+    cursor: (isAddingLocation || isReplacingActivity) ? 'crosshair' : 'default'
   };
 
   if (!apiKey) {
@@ -310,6 +356,31 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
           >
             <Plus className="w-4 h-4 mr-1" />
             {isAddingLocation ? 'Cancel' : 'Add Location'}
+          </Button>
+
+          <Button
+            variant={isReplacingActivity ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              if (isReplacingActivity) {
+                setIsReplacingActivity(false);
+                setSelectedActivityForReplacement(null);
+                toast({
+                  title: "Replacement Cancelled",
+                  description: "Activity replacement mode disabled.",
+                });
+              } else {
+                setIsReplacingActivity(true);
+                setIsAddingLocation(false);
+                toast({
+                  title: "Replace Activity Mode",
+                  description: "Click on any existing activity marker on the map to select it for replacement.",
+                });
+              }
+            }}
+          >
+            <Edit3 className="w-4 h-4 mr-1" />
+            {isReplacingActivity ? 'Cancel Replace' : 'Replace Activity'}
           </Button>
 
           <Select value={selectedDay.toString()} onValueChange={(value) => {
@@ -404,8 +475,8 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
               rotateControl={false}
               fullscreenControl={true}
               zoomControl={true}
-              // Only add onClick when in adding mode
-              {...(isAddingLocation && { onClick: handleMapClick })}
+              // Add onClick when in adding or replacing mode
+              {...((isAddingLocation || isReplacingActivity) && { onClick: handleMapClick })}
               style={{ width: '100%', height: '100%' }}
             >
               {allLocations.map(loc => (
@@ -414,6 +485,20 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
                   position={{ lat: loc.lat, lng: loc.lng }}
                   title={`Day ${loc.day}: ${loc.name}`}
                   draggable={loc.isCustom}
+                  onClick={() => {
+                    if (isReplacingActivity && !loc.isCustom && loc.type === 'activity') {
+                      // Select this activity for replacement
+                      setSelectedActivityForReplacement({
+                        name: loc.name,
+                        day: loc.day,
+                        data: loc.data
+                      });
+                      toast({
+                        title: "Activity Selected",
+                        description: `Selected "${loc.name}" for replacement. Now click on the map to place the new location.`,
+                      });
+                    }
+                  }}
                   onDragEnd={(event) => {
                     if (loc.isCustom && event.latLng) {
                       // Extract the original custom location ID (remove 'custom-' prefix)
@@ -463,7 +548,9 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
           <p className="text-xs text-gray-500 mt-2">
             {isAddingLocation
               ? "Click anywhere on the map to add a new location"
-              : "Click 'Add Location' to start adding custom spots. Drag blue-ringed custom locations to move them."
+              : isReplacingActivity
+                ? "Click on any existing activity marker to select it, then click on the map to place the new location"
+                : "Click 'Add Location' to add new spots or 'Replace Activity' to modify existing ones. Drag blue-ringed custom locations to move them."
             }
           </p>
         </div>
@@ -488,7 +575,7 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
                     <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
                       {loc.cost && loc.cost > 0 && (
                         <div className="flex items-center gap-1">
-                          <DollarSign className="w-3 h-3" />
+                          <IndianRupee className="w-3 h-3" />
                           <span>₹{loc.cost}</span>
                         </div>
                       )}
