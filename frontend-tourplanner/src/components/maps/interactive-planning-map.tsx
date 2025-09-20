@@ -47,18 +47,38 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
   const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAP_ID;
   const { toast } = useToast();
 
-  // Check for Map ID and warn if missing
+  // Check for Map ID and API Key and warn if missing
   useEffect(() => {
+    if (!apiKey) {
+      console.error('❌ Google Maps API Key is missing! Map will not load properly.');
+      toast({
+        title: "Configuration Error",
+        description: "Google Maps API Key is not configured. Please check your environment variables.",
+        variant: "destructive",
+      });
+    }
+    
     if (!mapId) {
       console.warn(
-        'Google Map ID is not configured. Advanced Markers may not work properly.\n' +
+        '⚠️ Google Map ID is not configured. Advanced Markers may not work properly.\n' +
         'To fix this:\n' +
         '1. Go to Google Cloud Console\n' +
         '2. Create a new Map ID\n' +
         '3. Add NEXT_PUBLIC_GOOGLE_MAP_ID to your environment variables'
       );
+      toast({
+        title: "Map ID Missing",
+        description: "Advanced Markers may not work without a proper Map ID.",
+        variant: "destructive",
+      });
+    } else {
+      console.log('✅ Google Maps configuration loaded:', { 
+        hasApiKey: !!apiKey, 
+        hasMapId: !!mapId,
+        mapId: mapId 
+      });
     }
-  }, [mapId]);
+  }, [mapId, apiKey, toast]);
 
   // Function to fetch nearby hotels from Google Places API
   const fetchNearbyHotels = async (lat: number, lng: number) => {
@@ -321,13 +341,16 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
   }, [isAddingLocation, isReplacingActivity, newLocation, selectedDay, selectedActivityForReplacement, itinerary, onItineraryUpdate, toast]);
 
   const handleLocationDrag = useCallback((locationId: string, newLat: number, newLng: number) => {
-    setCustomLocations(prev =>
-      prev.map(loc =>
+    console.log('🔄 Dragging location:', { locationId, newLat, newLng });
+    setCustomLocations(prev => {
+      const updated = prev.map(loc =>
         loc.id === locationId
           ? { ...loc, lat: newLat, lng: newLng }
           : loc
-      )
-    );
+      );
+      console.log('📍 Updated custom locations:', updated);
+      return updated;
+    });
   }, []);
 
   const handleDeleteLocation = useCallback((locationId: string) => {
@@ -614,7 +637,15 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
               {...((isAddingLocation || isReplacingActivity) && { onClick: handleMapClick })}
               style={{ width: '100%', height: '100%' }}
             >
-              {allLocations.map(loc => (
+              {allLocations.map(loc => {
+                console.log('📍 Rendering marker:', { 
+                  id: loc.id, 
+                  name: loc.name, 
+                  isCustom: loc.isCustom, 
+                  draggable: loc.isCustom,
+                  position: { lat: loc.lat, lng: loc.lng }
+                });
+                return (
                 <AdvancedMarker
                   key={loc.id}
                   position={{ lat: loc.lat, lng: loc.lng }}
@@ -635,6 +666,13 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
                     }
                   }}
                   onDragEnd={(event) => {
+                    console.log('🎯 Drag end event:', { 
+                      locationId: loc.id, 
+                      isCustom: loc.isCustom, 
+                      hasLatLng: !!event.latLng,
+                      lat: event.latLng?.lat(),
+                      lng: event.latLng?.lng()
+                    });
                     if (loc.isCustom && event.latLng) {
                       handleLocationDrag(loc.id, event.latLng.lat(), event.latLng.lng());
                     }
@@ -656,7 +694,8 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
                     )}
                   </div>
                 </AdvancedMarker>
-              ))}
+                );
+              })}
             </Map>
           </APIProvider>
         </div>
