@@ -22,9 +22,9 @@ export default function Home() {
   return (
     <ProtectedRoute>
       <LayoutWrapper>
-        <div className="container mx-auto p-4 md:p-8">
+        <div className="container mx-auto p-2 md:p-8">
           {!itinerary && !isLoading && (
-            <div className="max-w-2xl mx-auto">
+            <div className="max-w-[900px] mx-auto">
               <div className="text-center mb-12">
                 <h2 className="text-4xl font-bold tracking-tight text-primary sm:text-5xl dark:text-purple-500/90 text-gray-700 font-mono">
                   Plan Your Favourite Trip

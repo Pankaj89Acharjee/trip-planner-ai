@@ -4,21 +4,13 @@ export async function POST(request: NextRequest) {
   try {
     const { location, weatherType, activityType, originalActivity, budget } = await request.json();
 
-    console.log('Weather alternatives request:', { 
-      location, 
-      weatherType, 
-      activityType, 
-      originalActivity, 
-      budget 
-    });
 
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    const apiKey = process.env.GOOGLE_MAPS_SERVER_API_KEY || process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
     if (!apiKey) {
       throw new Error('Google Maps API key not found');
     }
 
-    // Get real places based on weather condition and location
     const alternatives = await getWeatherAppropriateAlternatives(
       location, 
       weatherType, 
@@ -38,7 +30,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Weather alternatives API error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch weather alternatives', details: error instanceof Error ? error.message : 'Unknown error' },
+      { error: 'Failed to fetch weather alternatives' },
       { status: 500 }
     );
   }
@@ -85,8 +77,7 @@ async function getWeatherAppropriateAlternatives(
       .sort((a, b) => (b.rating || 0) - (a.rating || 0))
       .slice(0, 3); // Return top 3 alternatives
 
-    console.log('Found alternatives:', sortedAlternatives);
-    return sortedAlternatives;
+           return sortedAlternatives;
 
   } catch (error) {
     console.error('Error getting weather alternatives:', error);

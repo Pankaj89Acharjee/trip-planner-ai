@@ -39,7 +39,6 @@ class SmartAdjustmentAgent {
 
     // Subscribe to real-time disruptions
     realTimeMonitoringService.subscribe(async (disruptions: TravelDisruption[]) => {
-     
       if (this.isActive && disruptions.length > 0) {        
         const recommendations = await this.generateAdjustmentRecommendations(disruptions, itinerary, userPreferences);        
         this.notifySubscribers(recommendations);
@@ -103,20 +102,14 @@ class SmartAdjustmentAgent {
     itinerary: any, 
     userPreferences: any
   ): Promise<SmartAdjustment[]> {
-    
-    //console.log('Analyzing disruption:', disruption);
     const adjustments: SmartAdjustment[] = [];
     const affectedDays = this.findAffectedDays(disruption, itinerary);
-    //console.log('Found affected days:', affectedDays);
 
     for (const day of affectedDays) {
-      //console.log('Generating adjustments for day:', day);
       const dayAdjustments = await this.generateDayAdjustments(disruption, day, userPreferences);
-      //console.log('Generated day adjustments:', dayAdjustments);
       adjustments.push(...dayAdjustments);
     }
 
-    //console.log('Total adjustments generated:', adjustments);
     return adjustments;
   }
 
@@ -124,34 +117,23 @@ class SmartAdjustmentAgent {
   private findAffectedDays(disruption: TravelDisruption, itinerary: any): any[] {
     if (!itinerary?.itinerary) return [];
 
-    // console.log('Finding affected days for disruption:', disruption);
-    // console.log('Checking itinerary:', itinerary);
-
     return itinerary.itinerary.filter((day: any) => {
-      // Check if disruption affects this day's activities by name
       const dayActivityNames = [
         ...(day.activities?.map((activity: any) => activity.name) || [])
       ].filter(Boolean);
 
-      // console.log('Day activity names:', dayActivityNames);
-      // console.log('Disruption affected locations:', disruption.affected_locations);
-
-      // More flexible matching - check if any part of the activity name matches
-      const isAffected = dayActivityNames.some((activityName: string) => {
+      // Check if any activity name matches affected locations
+      return dayActivityNames.some((activityName: string) => {
         const activityLower = activityName.toLowerCase();
         return disruption.affected_locations.some((affectedLocation: string) => {
           const locationLower = affectedLocation.toLowerCase();
-          // Try multiple matching strategies
           return activityLower === locationLower ||
                  activityLower.includes(locationLower) ||
                  locationLower.includes(activityLower) ||
-                 activityLower.includes('tour') && locationLower.includes('tour') ||
-                 activityLower.includes('visit') && locationLower.includes('visit');
+                 (activityLower.includes('tour') && locationLower.includes('tour')) ||
+                 (activityLower.includes('visit') && locationLower.includes('visit'));
         });
       });
-
-      //console.log('Is day affected:', isAffected);
-      return isAffected;
     });
   }
 
@@ -161,28 +143,21 @@ class SmartAdjustmentAgent {
     day: any, 
     userPreferences: any
   ): Promise<SmartAdjustment[]> {
-    
-    //console.log('Generating day adjustments for:', { disruption, day });
     const adjustments: SmartAdjustment[] = [];
 
-    // Weather-based adjustments
-    if (disruption.type === 'weather') {
-      //console.log('Processing weather adjustment for day:', day);
-      const weatherAdjustments = await this.generateWeatherAdjustments(disruption, day, userPreferences);
-      //console.log('Generated weather adjustments:', weatherAdjustments);
-      adjustments.push(...weatherAdjustments);
-    }
-
-    // Traffic-based adjustments
-    if (disruption.type === 'traffic') {
-      const trafficAdjustments = await this.generateTrafficAdjustments(disruption, day, userPreferences);
-      adjustments.push(...trafficAdjustments);
-    }
-
-    // Transportation-based adjustments
-    if (disruption.type === 'transportation') {
-      const transportAdjustments = await this.generateTransportAdjustments(disruption, day, userPreferences);
-      adjustments.push(...transportAdjustments);
+    switch (disruption.type) {
+      case 'weather':
+        const weatherAdjustments = await this.generateWeatherAdjustments(disruption, day, userPreferences);
+        adjustments.push(...weatherAdjustments);
+        break;
+      case 'traffic':
+        const trafficAdjustments = await this.generateTrafficAdjustments(disruption, day, userPreferences);
+        adjustments.push(...trafficAdjustments);
+        break;
+      case 'transportation':
+        const transportAdjustments = await this.generateTransportAdjustments(disruption, day, userPreferences);
+        adjustments.push(...transportAdjustments);
+        break;
     }
 
     return adjustments;
@@ -194,24 +169,15 @@ class SmartAdjustmentAgent {
     day: any, 
     userPreferences: any
   ): Promise<SmartAdjustment[]> {
-    
-    //console.log('generateWeatherAdjustments called with:', { disruption, day });
     const adjustments: SmartAdjustment[] = [];
     const weatherType = this.extractWeatherType(disruption.title);
-    //console.log('Extracted weather type:', weatherType);
 
-    // Check each activity for weather impact
     if (day.activities) {
-      //console.log('Processing activities:', day.activities);
       for (const activity of day.activities) {
-        //console.log('Checking activity for weather impact:', activity);
         const weatherImpact = this.assessWeatherImpact(activity, weatherType);
-        //console.log('Weather impact assessment:', weatherImpact);
         
         if (weatherImpact.needsAdjustment) {
-          //console.log('Activity needs adjustment, finding alternative...');
           const alternative = await this.findWeatherAlternative(activity, weatherType, userPreferences);
-          //console.log('Found alternative:', alternative);
           
           if (alternative) {
             const adjustment = {
@@ -229,16 +195,12 @@ class SmartAdjustmentAgent {
               requiresApproval: weatherImpact.severity !== 'critical',
               timestamp: new Date().toISOString()
             };
-            console.log('Created adjustment:', adjustment);
             adjustments.push(adjustment);
           }
         }
       }
-    } else {
-      console.log('No activities found in day:', day);
     }
 
-    console.log('Final weather adjustments:', adjustments);
     return adjustments;
   }
 
@@ -522,27 +484,6 @@ class SmartAdjustmentAgent {
     this.subscribers.forEach(callback => callback(recommendations));
   }
 
-  // Manual trigger for testing
-  async triggerManualCheck(): Promise<AdjustmentRecommendation | null> {
-    if (!this.currentItinerary) return null;
-    
-    // Simulate some disruptions for testing
-    const mockDisruptions: TravelDisruption[] = [
-      {
-        id: 'test_weather',
-        type: 'weather',
-        severity: 'moderate',
-        title: 'Weather Alert: HEAVY RAIN',
-        description: 'Heavy rain expected for the next 6 hours',
-        affected_locations: ['Tourist Area'],
-        estimated_duration: 360,
-        suggested_alternatives: ['Indoor activities', 'Museum visits'],
-        timestamp: new Date().toISOString()
-      }
-    ];
-    
-    return await this.generateAdjustmentRecommendations(mockDisruptions, this.currentItinerary, {});
-  }
 }
 
 // Export singleton instance

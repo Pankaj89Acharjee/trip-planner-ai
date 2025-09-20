@@ -17,12 +17,15 @@ export default function MyItinerariesPage() {
   const [loading, setLoading] = useState(true);
   const [bookingLoading, setBookingLoading] = useState<number | null>(null);
 
-  const { userData } = useAuth();
+  const { userData, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
-    loadItineraries();
-  }, []);
+    // Only load itineraries when userData is available and auth is not loading
+    if (userData?.uid && !authLoading) {
+      loadItineraries();
+    }
+  }, [userData?.uid, authLoading]);
 
   // Transforming data for frontend display compatible
   const transformItineraryData = (dbData: any[]): SavedItinerary[] => {
@@ -44,9 +47,18 @@ export default function MyItinerariesPage() {
   const loadItineraries = async () => {
     try {
       setLoading(true);
+      
+      // Double-check authentication before making API calls
       if (!userData?.uid) {
-        throw new Error('User not authenticated');
+        console.warn('User not authenticated, skipping itinerary load');
+        setLoading(false);
+        return;
       }
+
+      console.log('Loading itineraries for user:', userData.uid);
+
+      // Add a small delay to ensure authentication is fully settled
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       const result = await itinerarySyncService.getUserItineraries(userData.uid);
 
@@ -79,11 +91,26 @@ export default function MyItinerariesPage() {
       }
     } catch (error) {
       console.error('Failed to load itineraries:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Failed to load itineraries. Please try again.",
-      });
+      
+      // Check if it's an authentication error
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMessage.includes('User not authenticated') || errorMessage.includes('401')) {
+        toast({
+          variant: "destructive",
+          title: "Authentication Error",
+          description: "Please log in again to access your itineraries.",
+        });
+        // Redirect to auth page after a short delay
+        setTimeout(() => {
+          window.location.href = '/auth';
+        }, 2000);
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Failed to load itineraries. Please try again.",
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -203,14 +230,17 @@ export default function MyItinerariesPage() {
     }
   };
 
-  if (loading) {
+  // Show loading while auth is loading or while fetching itineraries
+  if (authLoading || loading) {
     return (
       <ProtectedRoute>
         <LayoutWrapper>
           <div className="container mx-auto p-6">
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading your itineraries...</p>
+              <p className="mt-4 text-gray-600">
+                {authLoading ? 'Authenticating...' : 'Loading your itineraries...'}
+              </p>
             </div>
           </div>
         </LayoutWrapper>

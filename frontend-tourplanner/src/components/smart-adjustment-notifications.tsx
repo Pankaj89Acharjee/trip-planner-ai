@@ -46,7 +46,6 @@ export function SmartAdjustmentNotifications({
 
       // Subscribe to recommendations
       const unsubscribe = smartAdjustmentAgent.subscribe((newRecommendations) => {
-        //console.log('SmartAdjustmentNotifications received recommendations:', newRecommendations);
         setRecommendations(newRecommendations);
       });
 
@@ -63,49 +62,6 @@ export function SmartAdjustmentNotifications({
     }
   };
 
-  // Test function to manually trigger adjustments for testing
-  const testAdjustments = () => {
-    // Find the first activity from the actual itinerary
-    let testActivity = 'Qutub Minar Complex Tour'; // Default
-    let testDay = 1;
-
-    if (itinerary?.itinerary) {
-      const firstDay = itinerary.itinerary[0];
-      if (firstDay?.activities?.[0]?.name) {
-        testActivity = firstDay.activities[0].name;
-        testDay = firstDay.day;
-      }
-    }
-
-    const testRecommendations = {
-      itineraryId: 'current',
-      adjustments: [
-        {
-          id: 'test_weather_1',
-          type: 'automatic' as const,
-          priority: 'medium' as const,
-          title: `Weather Adjustment: ${testActivity}`,
-          description: `Rain expected. Suggested alternative: Indoor Museum visit`,
-          affectedDay: testDay,
-          originalActivity: testActivity,
-          suggestedAlternative: 'Indoor Museum Visit',
-          reason: 'Weather condition: rain. Rain makes outdoor activities unsuitable.',
-          estimatedCostChange: -200,
-          confidence: 95,
-          requiresApproval: true,
-          timestamp: new Date().toISOString()
-        }
-      ],
-      overallImpact: 'moderate' as const,
-      totalCostChange: -200,
-      riskLevel: 'medium' as const,
-      alternativeOptions: ['Indoor activities', 'Museum visits'],
-      timestamp: new Date().toISOString()
-    };
-
-    //console.log('Setting test recommendations for real activity:', { testActivity, testDay, testRecommendations });
-    setRecommendations(testRecommendations);
-  };
 
   const handleAdjustmentAction = async (adjustment: SmartAdjustment, action: 'accept' | 'reject') => {
     setProcessingAdjustments(prev => new Set(prev).add(adjustment.id));
@@ -159,63 +115,41 @@ export function SmartAdjustmentNotifications({
   const applyAdjustmentToItinerary = (currentItinerary: any, adjustment: SmartAdjustment) => {
     if (!currentItinerary?.itinerary) {
       toast({
-        title: "No itinerary found in currentItinerary",
+        title: "No itinerary found",
         description: "Please try again.",
       });
-      console.log('No itinerary found in currentItinerary:', currentItinerary);
       return currentItinerary;
     }
 
-    // console.log('Applying adjustment to itinerary:', { adjustment, currentItinerary });
     const updatedItinerary = { ...currentItinerary };
-
-    // Find the affected day
     const affectedDay = updatedItinerary.itinerary.find((day: any) => day.day === adjustment.affectedDay);
+    
     if (!affectedDay) {
-      console.log('No affected day found for day:', adjustment.affectedDay);
       return currentItinerary;
     }
 
-    // console.log('Found affected day:', affectedDay);
-
-    // Find the activity to replace
     const activityIndex = affectedDay.activities?.findIndex((activity: any) =>
       activity.name === adjustment.originalActivity
     );
 
-    // console.log('Activity index found:', activityIndex, 'for activity:', adjustment.originalActivity);
-    // console.log('Available activities:', affectedDay.activities);
-
     if (activityIndex !== -1 && activityIndex !== undefined) {
       const originalActivity = affectedDay.activities[activityIndex];
-      // console.log('Original activity:', originalActivity);
-
+      
       // Replace the activity with the alternative
       const alternativeActivity = {
-        ...originalActivity, // Keep all original properties
+        ...originalActivity,
         name: adjustment.suggestedAlternative,
         description: `Alternative activity due to ${adjustment.reason}`,
         cost: (originalActivity.cost || 0) + adjustment.estimatedCostChange,
       };
 
       affectedDay.activities[activityIndex] = alternativeActivity;
-      //console.log('Replaced with alternative:', alternativeActivity);
-
-      // Recalculate total cost
       updatedItinerary.totalCost = calculateUpdatedTotalCost(updatedItinerary.itinerary);
-
-      // console.log('Applied adjustment to itinerary:', {
-      //   original: adjustment.originalActivity,
-      //   replacement: adjustment.suggestedAlternative,
-      //   newTotalCost: updatedItinerary.totalCost,
-      //   updatedItinerary
-      // });
     } else {
       toast({
         title: "Activity not found for replacement",
         description: "Please try again.",
       });
-      console.log('Activity not found for replacement');
     }
 
     return updatedItinerary;
@@ -258,19 +192,7 @@ export function SmartAdjustmentNotifications({
     }
   };
 
-  const getImpactColor = (impact: string) => {
-    switch (impact) {
-      case 'significant': return 'text-red-600';
-      case 'moderate': return 'text-orange-600';
-      case 'minimal': return 'text-green-600';
-      default: return 'text-gray-600';
-    }
-  };
-
-  // Debug logging
-  // console.log('SmartAdjustmentNotifications render - recommendations:', recommendations);
-  // console.log('Adjustments length:', recommendations?.adjustments?.length);
-
+  
   if (!recommendations || recommendations.adjustments.length === 0) {
     return (
       <Card className="border-green-200 bg-green-50">
@@ -284,21 +206,6 @@ export function SmartAdjustmentNotifications({
           <p className="text-green-700 text-sm">
             Real-time monitoring is active. We'll notify you if any adjustments are needed due to weather, traffic, or other conditions.
           </p>
-          {recommendations && (
-            <p className="text-xs text-gray-500 mt-2">
-              Recommended: {recommendations.adjustments?.length ? 'No Adjustments' : recommendations.adjustments.length} Adjustments
-            </p>
-          )}
-          <div className="mt-3">
-            <Button
-              onClick={testAdjustments}
-              size="sm"
-              variant="outline"
-              className="text-xs text-gray-800"
-            >
-              Adapt New Itinerary
-            </Button>
-          </div>
         </CardContent>
       </Card>
     );
@@ -311,20 +218,20 @@ export function SmartAdjustmentNotifications({
           <Bell className="h-5 w-5" />
           Smart Adjustments Available
           <Badge variant="outline" className="ml-auto text-xs bg-orange-100 text-orange-800 border-orange-300">
-            {recommendations.adjustments.length} suggestions
+            {recommendations?.adjustments.length} suggestions
           </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Overall Impact Alert */}
-        <Alert className={getPriorityColor(recommendations.riskLevel)}>
+        <Alert className={getPriorityColor(recommendations?.riskLevel || 'low')}>
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            <div className='text-sm'>Impact Level: <strong className='font-bold capitalize'>{recommendations.overallImpact}</strong></div>
+            <div className='text-sm'>Impact Level: <strong className='font-bold capitalize'>{recommendations?.overallImpact}</strong></div>
 
-            <div className='text-sm'>{recommendations.adjustments.length} adjustments recommended due to real-time conditions.</div>
+            <div className='text-sm'>{recommendations?.adjustments.length} adjustments recommended due to real-time conditions.</div>
 
-            {recommendations.totalCostChange !== 0 && (
+            {recommendations?.totalCostChange !== 0 && recommendations?.totalCostChange !== undefined && (
               <span className={recommendations.totalCostChange > 0 ? 'text-red-600 capitalize' : 'text-green-600 capitalize'}>
                 {' '}Cost change: ₹{Math.abs(recommendations.totalCostChange).toLocaleString()}
                 {recommendations.totalCostChange > 0 ? ' increase' : ' decrease'}
@@ -335,7 +242,7 @@ export function SmartAdjustmentNotifications({
 
         {/* Individual Adjustments */}
         <div className="space-y-3">
-          {recommendations.adjustments.map((adjustment) => (
+          {recommendations?.adjustments.map((adjustment) => (
             <Card key={adjustment.id} className="border-l-4 border-l-blue-500">
               <CardContent className="pt-4">
                 <div className="flex items-center justify-between mb-2">
@@ -406,11 +313,11 @@ export function SmartAdjustmentNotifications({
         </div>
 
         {/* Alternative Options */}
-        {recommendations.alternativeOptions.length > 0 && (
+        {recommendations?.alternativeOptions && recommendations.alternativeOptions.length > 0 && (
           <div className="mt-4">
             <h4 className="font-semibold mb-2 text-blue-900">Alternative Options:</h4>
             <div className="flex flex-wrap gap-2">
-              {recommendations.alternativeOptions.map((option, index) => (
+              {recommendations?.alternativeOptions.map((option, index) => (
                 <Badge key={index} variant="outline" className="text-blue-700 border-blue-300">
                   {option}
                 </Badge>

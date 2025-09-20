@@ -1,5 +1,3 @@
-import { toast } from "@/hooks/use-toast";
-
 // Real-time monitoring service for weather, traffic, and travel disruptions
 export interface WeatherData {
   location: string;
@@ -78,13 +76,11 @@ class RealTimeMonitoringService {
       clearInterval(this.monitoringInterval);
     }
 
-    // Checking immediately
     await this.checkForDisruptions(itinerary, travelDates);
-
     
     this.monitoringInterval = setInterval(async () => {
       await this.checkForDisruptions(itinerary, travelDates);
-    }, 6 * 60 * 60 * 1000); // 6 hours
+    }, 6 * 60 * 60 * 1000); // Check every 6 hours
   }
 
   // Stop monitoring
@@ -100,12 +96,10 @@ class RealTimeMonitoringService {
     const disruptions: TravelDisruption[] = [];
 
     try {
-      // Get all unique locations from itinerary
       const locations = this.extractLocations(itinerary);
 
       // Check weather for each location
-      //console.log('Checking weather for locations:', locations);
-      for (const location of locations) {   //As location is an Array    
+      for (const location of locations) {
         const weatherDisruptions = await this.checkWeatherConditions(location, travelDates);
         disruptions.push(...weatherDisruptions);
       }
@@ -114,12 +108,7 @@ class RealTimeMonitoringService {
       const trafficDisruptions = await this.checkTrafficConditions(itinerary, travelDates);
       disruptions.push(...trafficDisruptions);
 
-     
-
-      // Notify subscribers
-      //console.log(`Notifying ${this.subscribers.length} subscribers with ${disruptions.length} disruptions:`, disruptions);
       this.notifySubscribers(disruptions);
-
     } catch (error) {
       console.error('Error checking for disruptions:', error);
     }
@@ -174,16 +163,10 @@ class RealTimeMonitoringService {
 
     try {
       const weatherData = await this.fetchWeatherData(location);
-      //console.log("Weather data os", weatherData)
-
-      // Analyze weather conditions
       const weatherAlerts = this.analyzeWeatherConditions(weatherData);
-      //console.log(`Generated ${weatherAlerts.length} weather alerts for ${location}:`, weatherAlerts);
 
       // Convert weather alerts to travel disruptions
       weatherAlerts.forEach(alert => {
-        //console.log(`Processing alert:`, alert, `Impact: ${alert.impact}, Checking if moderate, significant or severe`);
-        // Create disruptions for moderate, significant, and severe impacts
         if (alert.impact === 'moderate' || alert.impact === 'significant' || alert.impact === 'severe') {
           const disruption = {
             id: `weather_${location}_${Date.now()}`,
@@ -196,19 +179,10 @@ class RealTimeMonitoringService {
             suggested_alternatives: this.getWeatherAlternatives(alert.type),
             timestamp: new Date().toISOString()
           };
-          console.log('Created weather disruption:', disruption);
           disruptions.push(disruption);
-        } else {
-          console.log(`Alert impact '${alert.impact}' is minimal, skipping disruption creation`);
         }
       });
-
     } catch (error) {
-      toast({
-        title: `Error checking weather for ${location}:`,
-        description: error as string,
-        variant: "destructive"
-      })
       console.error(`Error checking weather for ${location}:`, error);
     }
 
@@ -268,24 +242,16 @@ class RealTimeMonitoringService {
   private analyzeWeatherConditions(weatherData: WeatherData): WeatherAlert[] {
     const alerts: WeatherAlert[] = [];
 
-    console.log('Analyzing weather data:', {
-      precipitation: weatherData.precipitation,
-      windSpeed: weatherData.windSpeed,
-      visibility: weatherData.visibility
-    });
-
-    // Check for heavy rain that is stored in Precipitation
+    // Check for heavy rain
     if (weatherData.precipitation > 0) {
       const severity = weatherData.precipitation > 20 ? 'high' : 'moderate';
       const impact = weatherData.precipitation > 20 ? 'significant' : 'moderate';
-      const alert = {
+      alerts.push({
         type: 'rain' as const,
         severity: severity as 'high' | 'moderate',
         message: `Heavy rain (${weatherData.precipitation.toFixed(2)}mm) expected`,
         impact: impact as 'significant' | 'moderate'
-      };
-      //console.log('Generated rain alert:', alert);
-      alerts.push(alert);
+      });
     }
 
     // Check for storms
