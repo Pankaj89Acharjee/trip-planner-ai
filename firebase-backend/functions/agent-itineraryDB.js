@@ -117,6 +117,30 @@ export async function itineraryDatabaseAgent(action, data) {
             });
             return getUserBookingsResult;
 
+        case 'getBookingById':
+            // Get a single booking by ID with its associated itinerary
+            const getBookingByIdTool = toolMap.get('get-booking-by-id');
+            if (!getBookingByIdTool) {
+                return { success: false, error: "MISSING_AGENT" };
+            }
+
+            const getBookingByIdResult = await getBookingByIdTool({
+                booking_id: parseInt(data.bookingId, 10)
+            });
+            
+            // Parse result if it's a string
+            let parsedBookingById = getBookingByIdResult;
+            if (typeof getBookingByIdResult === 'string') {
+                try {
+                    parsedBookingById = JSON.parse(getBookingByIdResult);
+                } catch (error) {
+                    console.error('Failed to parse getBookingById result:', error);
+                    return { success: false, error: "Invalid response format" };
+                }
+            }
+            
+            return parsedBookingById;
+
         case 'delete':
             const deleteItineraryTool = toolMap.get('delete-itinerary');
             if (!deleteItineraryTool) {

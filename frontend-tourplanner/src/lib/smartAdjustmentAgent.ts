@@ -420,6 +420,13 @@ class SmartAdjustmentAgent {
     if (typeof activity.location === 'string') return activity.location;
     if (activity.location?.city) return activity.location.city;
     if (activity.location?.name) return activity.location.name;
+    if (typeof activity.location === 'object' && activity.location) {
+      const lat = (activity.location as any).latitude ?? (activity.location as any).lat;
+      const lng = (activity.location as any).longitude ?? (activity.location as any).lng;
+      if (typeof lat === 'number' && typeof lng === 'number') {
+        return `${lat},${lng}`;
+      }
+    }
     return 'Delhi, India'; // Default
   }
 

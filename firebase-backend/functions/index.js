@@ -99,6 +99,16 @@ exports.agentAPI = functions.https.onRequest(async (req, res) => {
                 const result = await itineraryDatabaseAgent('getUserBookings', { userUid });
                 res.json(result);
 
+            } else if (action === 'getBookingById') {
+                // Get booking by ID with itinerary details
+                const { bookingId } = req.body;
+                if (!bookingId) {
+                    return res.status(400).json({ error: "BookingId is required" });
+                }
+
+                const result = await itineraryDatabaseAgent('getBookingById', { bookingId });
+                res.json(result);
+
             } else if (action === 'updateBookingStatus') {
                 // Update booking status
                 const { bookingId, status, payment_status } = req.body;

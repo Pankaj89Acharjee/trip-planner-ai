@@ -8,7 +8,10 @@ import { Input } from "../ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { MapIcon, Plus, Trash2, Save, RotateCcw, Navigation, Clock, Edit3, IndianRupee } from "lucide-react";
 import { useMemo, useState, useCallback, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import type { ItineraryDay } from "@/lib/interfaces";
+import { itinerarySyncService, itineraryDataToSyncInPostgres } from "@/lib/itinerarySyncService";
+import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 
 interface CustomLocation {
@@ -21,11 +24,15 @@ interface CustomLocation {
   cost?: number;
   duration?: string;
   notes?: string;
+  replaceEntireDayForDay?: boolean;
 }
 
 interface InteractivePlanningMapProps {
   itinerary: ItineraryDay[];
   onItineraryUpdate?: (updatedItinerary: ItineraryDay[]) => void;
+  destination?: string;
+  userUid?: string;
+  centerOverride?: { lat: number; lng: number };
 }
 
 const getDayColor = (day: number) => {
@@ -42,10 +49,12 @@ const getDayColor = (day: number) => {
   return colors[day % colors.length];
 };
 
-export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: InteractivePlanningMapProps) {
+export function InteractivePlanningMap({ itinerary, onItineraryUpdate, destination, userUid, centerOverride }: InteractivePlanningMapProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const mapId = process.env.NEXT_PUBLIC_GOOGLE_MAP_ID;
   const { toast } = useToast();
+  const router = useRouter();
+  const auth = useAuth();
 
   // Check for Map ID and API Key and warn if missing
   useEffect(() => {
@@ -181,7 +190,7 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
     // Add custom locations
     customLocations.forEach(loc => {
       locations.push({
-        id: loc.id, // Use the original ID directly
+        id: loc.id,
         name: loc.name,
         lat: loc.lat,
         lng: loc.lng,
@@ -196,59 +205,75 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
   }, [itinerary, customLocations]);
 
   const mapCenter = useMemo(() => {
+    if (centerOverride) {
+      return centerOverride;
+    }
     if (allLocations.length > 0) {
       const avgLat = allLocations.reduce((sum, loc) => sum + loc.lat, 0) / allLocations.length;
       const avgLng = allLocations.reduce((sum, loc) => sum + loc.lng, 0) / allLocations.length;
       return { lat: avgLat, lng: avgLng };
     }
     return { lat: 28.6139, lng: 77.2090 };
-  }, [allLocations]);
+  }, [allLocations, centerOverride]);
 
   const handleMapClick = useCallback(async (event: any) => {
-    // Only handle clicks when we're in adding mode and it's a valid click event
-    if ((isAddingLocation || isReplacingActivity) && event.detail && event.detail.latLng) {
-      // a small delay to ensure it's not a drag end event
-      setTimeout(async () => {
-        const lat = event.detail.latLng.lat;
-        const lng = event.detail.latLng.lng;
+    console.log('🗺️ Map clicked:', { 
+      isAddingLocation, 
+      isReplacingActivity 
+    });
 
-        // If adding a hotel, fetch real hotel data from Google Places API
-        if (isAddingLocation && newLocation.type === 'hotel') {
-          setIsFetchingHotelData(true);
-          try {
-            const hotelData = await fetchNearbyHotels(lat, lng);
-            if (hotelData) {
-              setNewLocation(prev => ({
-                ...prev,
-                name: hotelData.name,
-                cost: hotelData.price || 0,
-                notes: hotelData.description || `Hotel at ${hotelData.address}`
-              }));
-              toast({
-                title: "Hotel Found!",
-                description: `Found ${hotelData.name} with pricing ₹${hotelData.price}/night`,
-              });
-            } else {
-              // Fallback: create a generic hotel entry
-              const fallbackHotel = {
-                name: 'Local Hotel',
-                price: Math.floor(Math.random() * 3000) + 1500,
-                address: `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
-                description: 'Hotel accommodation'
-              };
-              setNewLocation(prev => ({
-                ...prev,
-                name: fallbackHotel.name,
-                cost: fallbackHotel.price,
-                notes: fallbackHotel.description
-              }));
-              toast({
-                title: "Hotel Added",
-                description: `Added ${fallbackHotel.name} with estimated pricing ₹${fallbackHotel.price}/night`,
-              });
-            }
-          } catch (error) {
-            console.error('Failed to fetch hotel data:', error);
+    if (isAddingLocation && isReplacingActivity) {
+      console.error('❌ Both adding and replacing modes are active - this should not happen');
+      setIsReplacingActivity(false);
+      setSelectedActivityForReplacement(null);
+    }
+
+    // Only handle clicks when we're in adding mode and it's a valid click event
+    if (isAddingLocation || isReplacingActivity) {
+      let lat: number;
+      let lng: number;
+     
+      if (event.detail && event.detail.latLng) {
+        lat = event.detail.latLng.lat;
+        lng = event.detail.latLng.lng;
+      } else if (event.latLng) {
+        lat = event.latLng.lat;
+        lng = event.latLng.lng;
+      } else if (event.detail && event.detail.lat !== undefined) {
+        lat = event.detail.lat;
+        lng = event.detail.lng;
+      } else {
+        console.error('❌ Could not extract location from event:', event);
+        toast({
+          title: "Location Error",
+          description: "Could not extract location from map click. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      console.log('📍 Location extracted:', { lat, lng });
+
+
+
+
+      // If adding a hotel, fetch real hotel data from Google Places API
+      if (isAddingLocation && newLocation.type === 'hotel') {
+        setIsFetchingHotelData(true);
+        try {
+          const hotelData = await fetchNearbyHotels(lat, lng);
+          if (hotelData) {
+            setNewLocation(prev => ({
+              ...prev,
+              name: hotelData.name,
+              cost: hotelData.price || 0,
+              notes: hotelData.description || `Hotel at ${hotelData.address}`
+            }));
+            toast({
+              title: "Hotel Found!",
+              description: `Found ${hotelData.name} with pricing ₹${hotelData.price}/night`,
+            });
+          } else {
             // Fallback: create a generic hotel entry
             const fallbackHotel = {
               name: 'Local Hotel',
@@ -263,92 +288,155 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
               notes: fallbackHotel.description
             }));
             toast({
-              title: "Hotel Added (Offline Mode)",
+              title: "Hotel Added",
               description: `Added ${fallbackHotel.name} with estimated pricing ₹${fallbackHotel.price}/night`,
             });
-          } finally {
-            setIsFetchingHotelData(false);
+          }
+        } catch (error) {
+          console.error('Failed to fetch hotel data:', error);
+          // Fallback: create a generic hotel entry
+          const fallbackHotel = {
+            name: 'Local Hotel',
+            price: Math.floor(Math.random() * 3000) + 1500,
+            address: `Location at ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+            description: 'Hotel accommodation'
+          };
+          setNewLocation(prev => ({
+            ...prev,
+            name: fallbackHotel.name,
+            cost: fallbackHotel.price,
+            notes: fallbackHotel.description
+          }));
+          toast({
+            title: "Hotel Added (Offline Mode)",
+            description: `Added ${fallbackHotel.name} with estimated pricing ₹${fallbackHotel.price}/night`,
+          });
+        } finally {
+          setIsFetchingHotelData(false);
+        }
+      }
+
+      if (isReplacingActivity && selectedActivityForReplacement) {
+        // Replace existing activity
+        const updatedItinerary = itinerary.map(day => {
+          if (day.day === selectedActivityForReplacement.day) {
+            const updatedActivities = day.activities?.map(activity => {
+              if (activity.name === selectedActivityForReplacement.name) {
+                return {
+                  ...activity,
+                  name: newLocation.name || `New ${activity.name}`,
+                  description: newLocation.notes || `Replaced ${activity.name}`,
+                  cost: newLocation.cost || activity.cost,
+                  duration: parseInt(newLocation.duration || '1') || activity.duration,
+                  location: {
+                    latitude: lat,
+                    longitude: lng
+                  }
+                };
+              }
+              return activity;
+            }) || [];
+
+            return {
+              ...day,
+              activities: updatedActivities
+            };
+          }
+          return day;
+        });
+
+        onItineraryUpdate?.(updatedItinerary);
+        setIsReplacingActivity(false);
+        setSelectedActivityForReplacement(null);
+
+        toast({
+          variant: "success",
+          title: "Activity Replaced",
+          description: `Successfully replaced ${selectedActivityForReplacement.name} with ${newLocation.name || 'new location'}.`,
+        });
+      } else if (isAddingLocation) {
+        // Add new location
+        const fallbackPrice = newLocation.type === 'hotel' ? 2500 : 500; // ₹2500 for hotels, ₹500 for activities
+        const locationName = newLocation.name || `Custom ${newLocation.type} at ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        // Determine if this location is far from existing day locations; if so, we will replace the day
+        const existingDay = itinerary.find(d => d.day === selectedDay);
+        const getDistanceKm = (a: {lat:number,lng:number}, b: {lat:number,lng:number}) => {
+          const toRad = (x: number) => (x * Math.PI) / 180;
+          const R = 6371;
+          const dLat = toRad(b.lat - a.lat);
+          const dLng = toRad(b.lng - a.lng);
+          const lat1 = toRad(a.lat);
+          const lat2 = toRad(b.lat);
+          const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+          return 2 * R * Math.asin(Math.sqrt(h));
+        };
+        let replaceDay = false;
+        if (existingDay) {
+          const refPoints: Array<{lat:number,lng:number}> = [];
+          if (existingDay.accommodation?.location) {
+            refPoints.push({ lat: existingDay.accommodation.location.latitude, lng: existingDay.accommodation.location.longitude });
+          }
+          (existingDay.activities || []).forEach(a => {
+            if (a.location) {
+              refPoints.push({ lat: a.location.latitude, lng: a.location.longitude });
+            }
+          });
+          if (refPoints.length > 0) {
+            const avg = refPoints.reduce((acc, p) => ({ lat: acc.lat + p.lat, lng: acc.lng + p.lng }), { lat: 0, lng: 0 });
+            avg.lat /= refPoints.length; avg.lng /= refPoints.length;
+            const dist = getDistanceKm(avg, { lat, lng });
+            // If more than 100km away, consider as a different destination and replace the day
+            replaceDay = dist > 100;
           }
         }
+        
+        const newCustomLocation: CustomLocation = {
+          id: `custom-${Date.now()}`,
+          name: locationName,
+          lat,
+          lng,
+          day: selectedDay,
+          type: newLocation.type,
+          cost: newLocation.cost || fallbackPrice,
+          duration: newLocation.duration,
+          notes: newLocation.notes,
+          ...(replaceDay ? { replaceEntireDayForDay: true } : {})
+        };
 
-        if (isReplacingActivity && selectedActivityForReplacement) {
-          // Replace existing activity
-          const updatedItinerary = itinerary.map(day => {
-            if (day.day === selectedActivityForReplacement.day) {
-              const updatedActivities = day.activities?.map(activity => {
-                if (activity.name === selectedActivityForReplacement.name) {
-                  return {
-                    ...activity,
-                    name: newLocation.name || `New ${activity.name}`,
-                    description: newLocation.notes || `Replaced ${activity.name}`,
-                    cost: newLocation.cost || activity.cost,
-                    duration: parseInt(newLocation.duration || '1') || activity.duration,
-                    location: {
-                      latitude: lat,
-                      longitude: lng
-                    }
-                  };
-                }
-                return activity;
-              }) || [];
-
-              return {
-                ...day,
-                activities: updatedActivities
-              };
-            }
-            return day;
-          });
-
-          onItineraryUpdate?.(updatedItinerary);
-          setIsReplacingActivity(false);
-          setSelectedActivityForReplacement(null);
-
-          toast({
-            variant: "success",
-            title: "Activity Replaced",
-            description: `Successfully replaced ${selectedActivityForReplacement.name} with ${newLocation.name || 'new location'}.`,
-          });
-        } else if (isAddingLocation) {
-          // Add new location
-          const newCustomLocation: CustomLocation = {
-            id: `custom-${Date.now()}`,
-            name: newLocation.name || `Custom ${newLocation.type}`,
-            lat,
-            lng,
-            day: selectedDay,
-            type: newLocation.type,
-            cost: newLocation.cost,
-            duration: newLocation.duration,
-            notes: newLocation.notes
-          };
-
-          console.log('Adding custom location:', newCustomLocation);
-          setCustomLocations(prev => [...prev, newCustomLocation]);
-          setIsAddingLocation(false);
-        }
-
-        // Reset form
-        setNewLocation({
-          name: '',
-          type: 'activity', // Reset to default
-          cost: 0,
-          duration: '',
-          notes: ''
+        setCustomLocations(prev => {
+          // If replacing the entire day, remove any existing custom locations for that day first
+          const cleaned = replaceDay ? prev.filter(cl => cl.day !== selectedDay) : prev;
+          return [...cleaned, newCustomLocation];
         });
-      }, 50);
+        setIsAddingLocation(false);
+        
+        toast({
+          title: replaceDay ? "Day Replaced with New Destination" : "Location Added!",
+          description: replaceDay
+            ? `Day ${selectedDay} has been replaced due to distant location. Added "${newCustomLocation.name}".`
+            : `Successfully added "${newCustomLocation.name}" to Day ${selectedDay}`,
+          variant: "success",
+        });
+      }
+
+      // Reset form
+      setNewLocation({
+        name: '',
+        type: 'activity', // Reset to default
+        cost: 0,
+        duration: '',
+        notes: ''
+      });
     }
   }, [isAddingLocation, isReplacingActivity, newLocation, selectedDay, selectedActivityForReplacement, itinerary, onItineraryUpdate, toast]);
 
   const handleLocationDrag = useCallback((locationId: string, newLat: number, newLng: number) => {
-    console.log('🔄 Dragging location:', { locationId, newLat, newLng });
     setCustomLocations(prev => {
       const updated = prev.map(loc =>
         loc.id === locationId
           ? { ...loc, lat: newLat, lng: newLng }
           : loc
       );
-      console.log('📍 Updated custom locations:', updated);
       return updated;
     });
   }, []);
@@ -367,52 +455,58 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
     );
   }, []);
 
-  const handleSaveChanges = useCallback(() => {
-    // Merge custom locations with the current itinerary
+
+
+
+  const handleSaveChanges = useCallback((): ItineraryDay[] => {
+    // Merge custom locations with the current itinerary while removing prior custom placements
+    const customMarker = (id: string) => `[custom:${id}]`;
+    const isCustomActivity = (name?: string) => !!name && name.includes('[custom:');
+
     const updatedItinerary = itinerary.map(day => {
       const dayCustomLocations = customLocations.filter(loc => loc.day === day.day);
+      const replaceEntireDay = dayCustomLocations.some(loc => loc.replaceEntireDayForDay);
 
-      // Add custom hotels to accommodation
+      // Prepare lists
       const customHotels = dayCustomLocations.filter(loc => loc.type === 'hotel');
       const customActivities = dayCustomLocations.filter(loc => loc.type === 'activity');
       
-      console.log(`Day ${day.day}:`, { 
-        customHotels: customHotels.length, 
-        customActivities: customActivities.length,
-        customHotelsData: customHotels,
-        customActivitiesData: customActivities
-      });
+      // Start from either empty day (replace) or existing day with custom-activities removed
+      let baseActivities = replaceEntireDay
+        ? []
+        : (day.activities || []).filter(a => !isCustomActivity(a.name));
 
-      const updatedDay = {
-        ...day,
-        // If there are custom hotels, replace the accommodation
-        ...(customHotels.length > 0 && {
-          accommodation: {
-            name: customHotels[0].name,
-            description: customHotels[0].notes || `Custom ${customHotels[0].name}`,
-            costPerNight: customHotels[0].cost || 0,
-            location: {
-              latitude: customHotels[0].lat,
-              longitude: customHotels[0].lng
-            }
-          }
-        }),
-        // Add custom activities to the existing activities
-        activities: [
-          ...(day.activities || []),
-          ...customActivities.map(activity => ({
-            name: activity.name,
-            description: activity.notes || `Custom ${activity.name}`,
+      // If not replacing entire day, also ensure accommodation isn't a prior custom
+      const baseAccommodation = replaceEntireDay
+        ? undefined
+        : (day.accommodation && day.accommodation.description && day.accommodation.description.includes('[custom:'))
+          ? undefined
+          : day.accommodation;
+
+      const addedActivities = customActivities.map(activity => ({
+        name: `${activity.name} ${customMarker(activity.id)}`,
+        description: activity.notes ? `${activity.notes} ${customMarker(activity.id)}` : `Custom ${activity.name} ${customMarker(activity.id)}`,
             cost: activity.cost || 0,
             duration: parseInt(activity.duration || '1'),
-            location: {
-              latitude: activity.lat,
-              longitude: activity.lng
-            }
-          }))
-        ]
+        location: { latitude: activity.lat, longitude: activity.lng }
+      }));
+
+      const finalActivities = [...baseActivities, ...addedActivities];
+
+      const finalAccommodation = customHotels.length > 0
+        ? {
+            name: `${customHotels[0].name}`,
+            description: `${customHotels[0].notes || `Custom ${customHotels[0].name}` } ${customMarker(customHotels[0].id)}`,
+            costPerNight: customHotels[0].cost || 0,
+            location: { latitude: customHotels[0].lat, longitude: customHotels[0].lng }
+          }
+        : baseAccommodation;
+
+      return {
+        ...day,
+        accommodation: finalAccommodation,
+        activities: finalActivities
       };
-      return updatedDay;
     });
 
     //Final itinery updating 
@@ -423,12 +517,82 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
       title: "Changes Applied",
       description: `Updated itinerary with ${customLocations.length} custom locations. The itinerary has been modified successfully.`,
     });
+    return updatedItinerary;
   }, [itinerary, customLocations, onItineraryUpdate, toast]);
 
+
+
+
+
+  const handleBookItinerary = useCallback(async () => {
+    try {
+      // Save current changes first
+      const updatedItinerary = handleSaveChanges();
+
+      const effectiveUid = userUid || auth.user?.uid || 'guest';
+      const tripTitle = destination ? `Booking Trip to ${destination}` : 'My Trip';
+      const tripDestination = destination || 'Unknown';
+
+      
+      const today = new Date();
+      const startDate = today.toISOString().split('T')[0];
+      const endDate = new Date(today.getTime() + Math.max(updatedItinerary.length - 1, 0) * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .split('T')[0];
+
+      // Compute simple total cost
+      const totalCost = updatedItinerary.reduce((sum, day) => {
+        const acc = (day.accommodation?.costPerNight as number) || 0;
+        const acts = (day.activities || []).reduce((s, a) => s + ((a.cost as number) || 0), 0);
+        return sum + acc + acts;
+      }, 0);
+
+      const syncPayload = itineraryDataToSyncInPostgres(
+        effectiveUid,
+        tripTitle,
+        tripDestination,
+        { days: updatedItinerary, totalCost },
+        { status: 'saved', totalDays: updatedItinerary.length, travelDates: { startDate, endDate } }
+      );
+
+      // Backend expects travel_dates as a string; include alongside travelDates
+      (syncPayload as any).travel_dates = `${startDate} - ${endDate}`;
+
+      const result = await itinerarySyncService.saveItinerary(syncPayload);
+
+      if (result?.success) {
+        toast({
+          variant: 'success',
+          title: 'Itinerary Booked',
+          description: 'Your itinerary has been saved successfully.',
+        });
+        router.push('/my-itineraries');
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Save Failed',
+          description: result?.error || 'Could not save itinerary. Please try again.',
+        });
+      }
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Save Error',
+        description: error?.message || 'Unexpected error while saving itinerary.',
+      });
+    }
+  }, [handleSaveChanges, userUid, auth.user?.uid, destination, toast, router]);
+
+
+  
   const handleReset = useCallback(() => {
     setCustomLocations([]);
     setIsAddingLocation(false);
+    setIsReplacingActivity(false);
+    setSelectedActivityForReplacement(null);
   }, []);
+
+
 
   const handleAddNewDay = useCallback(() => {
     const maxDay = Math.max(...itinerary.map(d => d.day));
@@ -499,7 +663,15 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
           <Button
             variant={isAddingLocation ? "default" : "outline"}
             size="sm"
-            onClick={() => setIsAddingLocation(!isAddingLocation)}
+            onClick={() => {
+              if (isAddingLocation) {
+                setIsAddingLocation(false);
+              } else {
+                setIsAddingLocation(true);
+                setIsReplacingActivity(false);
+                setSelectedActivityForReplacement(null);
+              }
+            }}
           >
             <Plus className="w-4 h-4 mr-1" />
             {isAddingLocation ? 'Cancel' : 'Add Location'}
@@ -519,6 +691,7 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
               } else {
                 setIsReplacingActivity(true);
                 setIsAddingLocation(false);
+                setSelectedActivityForReplacement(null);
                 toast({
                   title: "Replace Activity Mode",
                   description: "Click on any existing activity marker on the map to select it for replacement.",
@@ -562,6 +735,11 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
             <RotateCcw className="w-4 h-4 mr-1" />
             Reset
           </Button>
+
+          <Button variant="default" size="sm" onClick={handleBookItinerary}>
+            <Navigation className="w-4 h-4 mr-1" />
+            Proceed Booking
+          </Button>
         </div>
 
         {/* Add Location Form */}
@@ -570,7 +748,7 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
             <h4 className="font-semibold mb-3">Add New Location</h4>
             <div className="grid grid-cols-2 gap-3">
               <Input
-                placeholder="Location name"
+                placeholder={`Enter ${newLocation.type} name (e.g., "Taj Mahal", "Marriott Hotel")`}
                 value={newLocation.name}
                 onChange={(e) => setNewLocation(prev => ({ ...prev, name: e.target.value }))}
               />
@@ -586,9 +764,9 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
                 </SelectContent>
               </Select>
               <Input
-                placeholder={newLocation.type === 'hotel' ? "Cost (₹) - Auto-filled from hotel search" : "Cost (₹)"}
+                placeholder={newLocation.type === 'hotel' ? "Cost (₹) - Auto-filled from hotel search" : "Cost (₹) - Default: ₹500"}
                 type="number"
-                value={newLocation.cost}
+                value={newLocation.cost || ''}
                 onChange={(e) => setNewLocation(prev => ({ ...prev, cost: parseInt(e.target.value) || 0 }))}
                 className={newLocation.type === 'hotel' && newLocation.cost > 0 ? 'bg-green-50 border-green-300' : ''}
                 disabled={isFetchingHotelData}
@@ -611,6 +789,19 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
                 "Click on the map to place the location"
               )}
             </p>
+            <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-xs text-blue-700 dark:text-blue-300">
+              💡 <strong>Tip:</strong> Make sure to click directly on the map area, not on existing markers or controls.
+              {!newLocation.name && (
+                <div className="mt-1">
+                  📝 <strong>Name:</strong> If you don't enter a name, it will use coordinates as the location name.
+                </div>
+              )}
+              {!newLocation.cost && (
+                <div className="mt-1">
+                  💰 <strong>Cost:</strong> If you don't enter a cost, it will use ₹{newLocation.type === 'hotel' ? '2500' : '500'} as default.
+                </div>
+              )}
+            </div>
           </div>
         )}
       </CardHeader>
@@ -634,18 +825,12 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
               fullscreenControl={true}
               zoomControl={true}
               // Add onClick when in adding or replacing mode
-              {...((isAddingLocation || isReplacingActivity) && { onClick: handleMapClick })}
+              {...((isAddingLocation || isReplacingActivity) && { 
+                onClick: handleMapClick
+              })}
               style={{ width: '100%', height: '100%' }}
             >
-              {allLocations.map(loc => {
-                console.log('📍 Rendering marker:', { 
-                  id: loc.id, 
-                  name: loc.name, 
-                  isCustom: loc.isCustom, 
-                  draggable: loc.isCustom,
-                  position: { lat: loc.lat, lng: loc.lng }
-                });
-                return (
+              {allLocations.map(loc => (
                 <AdvancedMarker
                   key={loc.id}
                   position={{ lat: loc.lat, lng: loc.lng }}
@@ -666,13 +851,6 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
                     }
                   }}
                   onDragEnd={(event) => {
-                    console.log('🎯 Drag end event:', { 
-                      locationId: loc.id, 
-                      isCustom: loc.isCustom, 
-                      hasLatLng: !!event.latLng,
-                      lat: event.latLng?.lat(),
-                      lng: event.latLng?.lng()
-                    });
                     if (loc.isCustom && event.latLng) {
                       handleLocationDrag(loc.id, event.latLng.lat(), event.latLng.lng());
                     }
@@ -694,8 +872,7 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate }: Interac
                     )}
                   </div>
                 </AdvancedMarker>
-                );
-              })}
+              ))}
             </Map>
           </APIProvider>
         </div>

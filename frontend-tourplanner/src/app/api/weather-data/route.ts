@@ -1,106 +1,161 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Check if a string looks like an activity description rather than a location
+function looksLikeActivityDescription(text: string): boolean {
+  if (!text) return false;
+  const lower = text.toLowerCase();
+  // Activity keywords that indicate this is not a location
+  const activityKeywords = [
+    'explore', 'visit', 'tour', 'experience', 'enjoy', 'discover',
+    'adventure', 'activity', 'attraction', 'excursion', 'outing',
+    'market', 'cuisine', 'food', 'shopping', 'sightseeing'
+  ];
+  // If it contains multiple words and activity keywords, likely a description
+  const words = lower.split(/\s+/);
+  const hasActivityKeyword = activityKeywords.some(keyword => lower.includes(keyword));
+  // If it's a long description-like text (3+ words) with activity keywords, it's probably not a location
+  return hasActivityKeyword && words.length >= 3;
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { location, apiKey } = await request.json();
+    const { location } = await request.json();
 
-    console.log('Weather API request:', { location, apiKey: apiKey ? 'provided' : 'missing' });
+    console.log('Weather API request for location:', location);
 
-    if (!location || !apiKey) {
-      console.error('Missing parameters:', { location, hasApiKey: !!apiKey });
+    if (!location) {
       return NextResponse.json(
-        { error: 'Missing required parameters' },
+        { error: 'Location parameter is required' },
         { status: 400 }
+      );
+    }
+
+
+    const googleApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!googleApiKey) {
+      console.error('Google Maps API key is not set in environment variables');
+      return NextResponse.json(
+        { error: 'Google Maps API key not configured. Please set GOOGLE_MAPS_SERVER_API_KEY or NEXT_PUBLIC_GOOGLE_MAPS_API_KEY in your .env file.' },
+        { status: 500 }
       );
     }
 
     // Ensure location is a string
     const locationStr = typeof location === 'string' ? location : String(location);
 
-    // Use Google Cloud Weather API
-    // First, we need to get coordinates for the location using Google Maps Geocoding API
-    const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(locationStr)}&key=${apiKey}`;
-    console.log('Getting coordinates for:', locationStr);
-    
-    const geocodeResponse = await fetch(geocodeUrl);
-    if (!geocodeResponse.ok) {
-      throw new Error(`Geocoding API error: ${geocodeResponse.status}`);
-    }
-    
-    const geocodeData = await geocodeResponse.json();
-    
-    if (!geocodeData.results || geocodeData.results.length === 0) {
-      console.log(`Location not found for: ${locationStr}, using fallback weather data`);
+    // Handle coordinates format (lat,lng) or location name
+    const latLngMatch = locationStr.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+    let lat: number;
+    let lng: number;
+
+    if (latLngMatch) {
+      lat = parseFloat(latLngMatch[1]);
+      lng = parseFloat(latLngMatch[2]);
+    } else {
+      if (looksLikeActivityDescription(locationStr)) {
+        return NextResponse.json(
+          { error: `Invalid location: "${locationStr}" appears to be an activity description rather than a location. Please provide coordinates (lat,lng) or a valid location name/city.` },
+          { status: 400 }
+        );
+      }
+
+      // If location is a name/city, geocode it first to get coordinates
+      const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(locationStr)}&key=${googleApiKey}`;
+      console.log('Geocoding location:', locationStr);
       
-      // Return fallback weather data when location is not found
-      const fallbackWeatherData = {
-        main: {
-          temp: 25 + Math.random() * 10,
-          feels_like: 28 + Math.random() * 5,
-          humidity: 60 + Math.random() * 30,
-          pressure: 1013 + Math.random() * 20
-        },
-        weather: [{
-          main: ['Clear', 'Clouds', 'Rain', 'Thunderstorm'][Math.floor(Math.random() * 4)],
-          description: ['clear sky', 'few clouds', 'light rain', 'thunderstorm'][Math.floor(Math.random() * 4)]
-        }],
-        wind: {
-          speed: Math.random() * 10
-        },
-        visibility: 10000 - Math.random() * 2000,
-        rain: Math.random() > 0.7 ? { '1h': Math.random() * 5 } : undefined,
-        name: locationStr
-      };
+      const geocodeResponse = await fetch(geocodeUrl);
+      if (!geocodeResponse.ok) {
+        throw new Error(`Geocoding API error: ${geocodeResponse.status}`);
+      }
       
-      return NextResponse.json(fallbackWeatherData);
+      const geocodeData = await geocodeResponse.json();
+      if (!geocodeData.results || geocodeData.results.length === 0) {
+        return NextResponse.json(
+          { error: `Location "${locationStr}" not found. Please check the location name or use coordinates in format "lat,lng".` },
+          { status: 404 }
+        );
+      }
+      
+      const coordinates = geocodeData.results[0].geometry.location;
+      lat = coordinates.lat;
+      lng = coordinates.lng;
+      console.log('Geocoded to coordinates:', lat, lng);
     }
+
     
-    const coordinates = geocodeData.results[0].geometry.location;
-    const { lat, lng } = coordinates;
-    
-    // Now use Google Cloud Weather API (requires Google Cloud project and billing enabled)
-    // Note: This requires authentication with Google Cloud credentials
-    const weatherUrl = `https://weather.googleapis.com/v1/weather?location=${lat},${lng}&key=${apiKey}`;
-    console.log('Getting weather data for coordinates:', lat, lng);
-    
-    const weatherResponse = await fetch(weatherUrl);
-    
+    const weatherUrl = `https://weather.googleapis.com/v1/currentConditions:lookup?key=${googleApiKey}&location.latitude=${lat}&location.longitude=${lng}`;
+
+    console.log('Fetching weather data from Google Cloud Weather API for coordinates:', lat, lng);
+
+    const weatherResponse = await fetch(weatherUrl, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+
     if (!weatherResponse.ok) {
       const errorText = await weatherResponse.text();
-      console.error('Google Cloud Weather API error:', weatherResponse.status, errorText);
+      const errorData = await weatherResponse.json().catch(() => ({ message: errorText }));
+      console.error('Google Cloud Weather API error:', weatherResponse.status, errorData);
       
-      // If Google Cloud Weather API fails, fall back to a simple weather service
-      // You might need to enable Google Cloud Weather API and set up proper authentication
-      console.log('Falling back to basic weather data for:', locationStr);
+      // Return proper error based on status
+      if (weatherResponse.status === 404) {
+        return NextResponse.json(
+          { error: `Weather data not found for location. Please check coordinates: ${lat},${lng}` },
+          { status: 404 }
+        );
+      }
       
-      // Return structured weather data that matches our expected format
-      const fallbackWeatherData = {
-        main: {
-          temp: 25 + Math.random() * 10,
-          feels_like: 28 + Math.random() * 5,
-          humidity: 60 + Math.random() * 30,
-          pressure: 1013 + Math.random() * 20
-        },
-        weather: [{
-          main: ['Clear', 'Clouds', 'Rain', 'Thunderstorm'][Math.floor(Math.random() * 4)],
-          description: ['clear sky', 'few clouds', 'light rain', 'thunderstorm'][Math.floor(Math.random() * 4)]
-        }],
-        wind: {
-          speed: Math.random() * 10
-        },
-        visibility: 10000 - Math.random() * 2000,
-        rain: Math.random() > 0.7 ? { '1h': Math.random() * 5 } : undefined,
-        name: locationStr,
-        coord: { lat, lon: lng }
-      };
-      
-      return NextResponse.json(fallbackWeatherData);
+      if (weatherResponse.status === 403 || weatherResponse.status === 401) {       
+        let errorMessage = 'Google Cloud Weather API access denied.';
+        
+        return NextResponse.json(
+          { error: errorMessage },
+          { status: 403 }
+        );
+      }
+
+      return NextResponse.json(
+        { error: `Weather API error: ${weatherResponse.status}. ${errorData.message || errorData.error?.message || 'Failed to fetch weather data'}` },
+        { status: weatherResponse.status }
+      );
     }
-    
+
     const weatherData = await weatherResponse.json();
-    console.log('Weather data received for:', locationStr);
+    //console.log('Weather data received successfully for:', locationStr);
+
     
-    return NextResponse.json(weatherData);
+    const transformedData = {
+      main: {
+        temp: weatherData.temperature?.degrees || null,
+        feels_like: weatherData.feelsLikeTemperature?.degrees || null,
+        humidity: weatherData.relativeHumidity || null,
+        pressure: weatherData.airPressure?.meanSeaLevelMillibars || null
+      },
+      weather: [{
+        main: weatherData.weatherCondition?.type || 'Unknown',
+        description: weatherData.weatherCondition?.description?.text || 'Unknown condition'
+      }],
+      wind: {
+        speed: weatherData.wind?.speed?.value ? weatherData.wind.speed.value * 0.277778 : 0, // Convert km/h to m/s (divide by 3.6)
+        deg: weatherData.wind?.direction?.degrees || 0
+      },
+      visibility: weatherData.visibility?.distance ? weatherData.visibility.distance : 10, // Already in km
+      rain: weatherData.precipitation?.qpf?.quantity && weatherData.precipitation.qpf.quantity > 0 
+        ? { '1h': weatherData.precipitation.qpf.quantity } 
+        : undefined,
+      snow: weatherData.precipitation?.snowQpf?.quantity && weatherData.precipitation.snowQpf.quantity > 0 
+        ? { '1h': weatherData.precipitation.snowQpf.quantity } 
+        : undefined,
+      precipitationProbability: weatherData.precipitation?.probability?.percent || 0, // Probability of precipitation (0-100%)
+      coord: { lat, lon: lng },
+      name: locationStr,
+      // Include raw data for reference
+      raw: weatherData
+    };
+
+    return NextResponse.json(transformedData);
   } catch (error) {
     console.error('Weather data API error:', error);
     return NextResponse.json(

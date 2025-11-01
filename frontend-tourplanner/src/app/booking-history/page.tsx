@@ -11,6 +11,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Calendar, MapPin, Users, DollarSign, CreditCard, Clock, CheckCircle2, XCircle, Receipt, Trash2, Eye } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 export default function BookingHistoryPage() {
   const [bookings, setBookings] = useState<BookingData[]>([]);
@@ -20,6 +21,7 @@ export default function BookingHistoryPage() {
 
   const { userData, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
     // Only load bookings when userData is available and auth is not loading
@@ -331,14 +333,71 @@ export default function BookingHistoryPage() {
                       )}
                     </div>
 
-                    <div className="flex gap-2 mt-6">
-                      {booking.status === 'confirmed' && (
+                    <div className="flex gap-2 mt-6 flex-wrap">
+                      {/* View Booking Button - Shows for confirmed and paid bookings */}
+                      {booking.status === 'confirmed' && booking.paymentStatus === 'paid' && (
+                        <>
+                          <Button
+                            onClick={() => router.push(`/booking-details/${booking.id}`)}
+                            className="flex-1 bg-blue-600 hover:bg-blue-700"
+                            size="sm"
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Details
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => booking.id && handleCancelBooking(booking.id)}
+                            disabled={cancellingBooking === booking.id}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            {cancellingBooking === booking.id ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600 mr-2"></div>
+                                Cancelling...
+                              </>
+                            ) : (
+                              <>
+                                <XCircle className="h-4 w-4 mr-2" />
+                                Cancel
+                              </>
+                            )}
+                          </Button>
+                        </>
+                      )}
+
+                      {/* Pending Payment - Show Pay Now */}
+                      {booking.paymentStatus === 'pending' && booking.status !== 'cancelled' && (
+                        <Button
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => booking.id && handlePayNow(booking.id)}
+                          disabled={payingBooking === booking.id}
+                          className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                        >
+                          {payingBooking === booking.id ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                              Processing...
+                            </>
+                          ) : (
+                            <>
+                              <CreditCard className="h-4 w-4 mr-2" />
+                              Pay Now
+                            </>
+                          )}
+                        </Button>
+                      )}
+
+                      {/* Confirmed but not paid - Show cancel and pay */}
+                      {booking.status === 'confirmed' && booking.paymentStatus !== 'paid' && booking.paymentStatus !== 'pending' && (
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => booking.id && handleCancelBooking(booking.id)}
                           disabled={cancellingBooking === booking.id}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
                           {cancellingBooking === booking.id ? (
                             <>
@@ -354,41 +413,12 @@ export default function BookingHistoryPage() {
                         </Button>
                       )}
 
+                      {/* Cancelled Status */}
                       {booking.status === 'cancelled' && (
                         <div className="flex-1 p-2 bg-red-100 text-red-800 rounded text-center text-sm font-medium">
                           <XCircle className="h-4 w-4 inline mr-1" />
                           Cancelled
                         </div>
-                      )}
-
-                      {booking.paymentStatus === 'paid' && (
-                        <div className="flex-1 p-2 bg-green-100 text-green-800 rounded text-center text-sm font-medium">
-                          <CheckCircle2 className="h-4 w-4 inline mr-1" />
-                          Completed
-                        </div>
-                      )}
-
-                      {booking.paymentStatus === 'pending' && (
-                        <Button
-                          variant="outline" size="sm"
-                          onClick={() => booking.id && handlePayNow(booking.id)}
-                          disabled={payingBooking === booking.id}
-                          className="flex-1 p-2 dark:bg-purple-800/90 bg-purple-800/
-                        90 dark:text-white-800 text-white rounded text-center text-sm 
-                        font-medium"
-                        >
-                          {payingBooking === booking.id ? (
-                            <>
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                              Processing...
-                            </>
-                          ) : (
-                            <>
-                              <CreditCard className="h-4 w-4 inline mr-1" />
-                              Pay Now
-                            </>
-                          )}
-                        </Button>
                       )}
                     </div>
                   </CardContent>

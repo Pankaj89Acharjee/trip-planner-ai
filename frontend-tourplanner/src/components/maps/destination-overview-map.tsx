@@ -27,6 +27,7 @@ interface DestinationOverviewMapProps {
   hotels?: any[];
   activities?: any[];
   isLoading?: boolean;
+  onAddToItinerary?: (item: any, type: 'hotel' | 'activity') => void;
 }
 
 // FALLBACK DATA: Only used when AI agent returns no results or API fails
@@ -187,7 +188,8 @@ export function DestinationOverviewMap({
   onLocationSelect,
   hotels = [],
   activities = [],
-  isLoading = false
+  isLoading = false,
+  onAddToItinerary
 }: DestinationOverviewMapProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const [selectedPOI, setSelectedPOI] = useState<POI | null>(null);
@@ -351,7 +353,7 @@ export function DestinationOverviewMap({
         )}
 
         {/* POI List */}
-        <div className="space-y-3">
+        {/* <div className="space-y-3">
           <h4 className="font-semibold text-sm text-gray-700 dark:text-gray-300">
             Available Locations ({filteredPOIs.length})
           </h4>
@@ -416,7 +418,60 @@ export function DestinationOverviewMap({
               ))}
             </div>
           )}
-        </div>
+        </div> */}
+
+        {/* Quick Book Sections */}
+        {(hotels.length > 0 || activities.length > 0) && (
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {/* Hotels */}
+            <div>
+              <h5 className="font-semibold text-sm mb-2">Hotels</h5>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {hotels.slice(0, 8).map((h, idx) => (
+                  <div key={`${h.id || h.name || 'hotel'}-${idx}`} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div>
+                      <div className="font-medium text-sm">{h.name || h.hotel_name}</div>
+                      <div className="text-xs text-gray-500 flex items-center gap-2">
+                        <IndianRupee className="w-3 h-3" />
+                        <span>{(h.cost || h.cost_per_night || 0).toLocaleString()} /-</span>
+                      </div>
+                    </div>
+                    <button
+                      className="px-2 py-1 text-xs border rounded hover:bg-gray-50"
+                      onClick={() => onAddToItinerary?.(h, 'hotel')}
+                    >
+                      Add to Itinerary
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Activities */}
+            <div>
+              <h5 className="font-semibold text-sm mb-2">Activities</h5>
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {activities.slice(0, 10).map((a, idx) => (
+                  <div key={`${a.id || a.name || 'activity'}-${idx}`} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div>
+                      <div className="font-medium text-sm">{a.name || a.activity_name}</div>
+                      <div className="text-xs text-gray-500 flex items-center gap-2">
+                        <IndianRupee className="w-3 h-3" />
+                        <span>{(a.cost || 0).toLocaleString()} /-</span>
+                      </div>
+                    </div>
+                    <button
+                      className="px-2 py-1 text-xs border rounded hover:bg-gray-50"
+                      onClick={() => onAddToItinerary?.(a, 'activity')}
+                    >
+                      Add to Itinerary
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { itinerarySyncService } from "@/lib/itinerarySyncService";
 import { SmartAdjustmentNotifications } from "./smart-adjustment-notifications";
 import type { SmartAdjustment } from "@/lib/smartAdjustmentAgent";
+import { TrafficMonitoring } from "./traffic-monitoring";
 
 type ItineraryDisplayProps = {
   itinerary: FullItinerary;
@@ -191,7 +192,7 @@ export function ItineraryDisplay({
               <h3 className="text-lg font-semibold text-gray-900 mb-2">Ready to Save Your Itinerary?</h3>
               <p className="text-gray-600">Save this complete travel package to your account for future booking and modifications.</p>
             </div>
-            <div className="flex gap-3">           
+            <div className="flex gap-3">
               <Button
                 onClick={handleSaveItineraryPackage}
                 disabled={isSaving}
@@ -286,49 +287,68 @@ export function ItineraryDisplay({
               originalDay={itinerary.itinerary.find(d => d.day === day.day)}
             />
           ))}
+
+          <div>
+            <MapView
+              itinerary={currentItinerary.itinerary}
+              destination={formValues?.destination || 'Generated Destination'}
+              interests={formValues?.interests || []}
+              budget={formValues?.budget || 0}
+              userUid={userData?.uid}
+            onDestinationChange={(dest) => {
+              if (setFormValues) {
+                setFormValues({ ...(formValues || {}), destination: dest });
+              }
+            }}
+              onLocationSelect={(location) => {
+                console.log('Location selected:', location);
+              }}
+              onItineraryUpdate={(updatedItinerary) => {
+                console.log('Itinerary updated:', updatedItinerary);
+                // Recalculating total cost based on updated itinerary
+                const newTotalCost = calculateTotalCost(updatedItinerary);
+
+                // Update the current itinerary with user modifications and new total cost
+                const updatedFullItinerary = {
+                  ...currentItinerary,
+                  itinerary: updatedItinerary,
+                  totalCost: newTotalCost
+                };
+                setCurrentItinerary(updatedFullItinerary);
+                setItinerary(updatedFullItinerary);
+
+                toast({
+                  title: "Itinerary Updated",
+                  description: `Your itinerary has been updated. New total cost: ₹${newTotalCost.toLocaleString()}`,
+                });
+              }}
+            />
+          </div>
         </div>
         <div className="xl:col-span-1 space-y-6 sticky top-24 mr-2">
           <CostSummary
             totalCost={currentItinerary.totalCost}
             itinerary={currentItinerary.itinerary}
+            destination={formValues?.destination}
+            budget={formValues?.budget}
+            startDate={formValues?.startDate}
           />
 
-          {/* Smart Adjustment Notifications */}
+          {/* Real-Time Traffic & Weather Monitoring */}
+          <TrafficMonitoring
+            itinerary={currentItinerary}
+            travelDates={formValues?.travelDates || (formValues?.startDate && formValues?.endDate ? {
+              startDate: formValues.startDate,
+              endDate: formValues.endDate
+            } : undefined)}
+          />
+
+          {/* Smart Adjustment Notifications with Agent */}
           <SmartAdjustmentNotifications
             itinerary={currentItinerary}
             onAdjustmentAccepted={handleAdjustmentAccepted}
             onAdjustmentRejected={handleAdjustmentRejected}
             userPreferences={formValues}
-          />
-
-          <MapView
-            itinerary={currentItinerary.itinerary}
-            destination={formValues?.destination || 'Generated Destination'}
-            interests={formValues?.interests || []}
-            budget={formValues?.budget || 0}
-            userUid={userData?.uid}
-            onLocationSelect={(location) => {
-              console.log('Location selected:', location);
-            }}
-            onItineraryUpdate={(updatedItinerary) => {
-              console.log('Itinerary updated:', updatedItinerary);
-              // Recalculating total cost based on updated itinerary
-              const newTotalCost = calculateTotalCost(updatedItinerary);
-
-              // Update the current itinerary with user modifications and new total cost
-              const updatedFullItinerary = {
-                ...currentItinerary,
-                itinerary: updatedItinerary,
-                totalCost: newTotalCost
-              };
-              setCurrentItinerary(updatedFullItinerary);
-              setItinerary(updatedFullItinerary);
-
-              toast({
-                title: "Itinerary Updated",
-                description: `Your itinerary has been updated. New total cost: ₹${newTotalCost.toLocaleString()}`,
-              });
-            }}
           />
         </div>
       </div>

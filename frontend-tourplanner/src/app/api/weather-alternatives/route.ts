@@ -111,25 +111,31 @@ function getSearchTermsForWeather(weatherType: string, activityType: string): st
 }
 
 async function searchNearbyPlaces(location: string, searchTerm: string, apiKey: string) {
-  // First, get coordinates for the location
-  const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${apiKey}`;
-  const geocodeResponse = await fetch(geocodeUrl);
-  
-  if (!geocodeResponse.ok) {
-    throw new Error(`Geocoding failed: ${geocodeResponse.status}`);
+  // Determine coordinates: if `location` is "lat,lng" use directly; otherwise geocode
+  const latLngMatch = location.match(/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/);
+  let lat: string;
+  let lng: string;
+
+  if (latLngMatch) {
+    lat = latLngMatch[1];
+    lng = latLngMatch[2];
+  } else {
+    const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${apiKey}`;
+    const geocodeResponse = await fetch(geocodeUrl);
+    if (!geocodeResponse.ok) {
+      throw new Error(`Geocoding failed: ${geocodeResponse.status}`);
+    }
+    const geocodeData = await geocodeResponse.json();
+    if (!geocodeData.results || geocodeData.results.length === 0) {
+      throw new Error('Location not found');
+    }
+    const coordinates = geocodeData.results[0].geometry.location;
+    lat = String(coordinates.lat);
+    lng = String(coordinates.lng);
   }
-  
-  const geocodeData = await geocodeResponse.json();
-  
-  if (!geocodeData.results || geocodeData.results.length === 0) {
-    throw new Error('Location not found');
-  }
-  
-  const coordinates = geocodeData.results[0].geometry.location;
-  const { lat, lng } = coordinates;
-  
-  // Search for nearby places
-  const placesUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=5000&type=${searchTerm}&key=${apiKey}`;
+
+  // Search for nearby places. Use keyword for free-text, and a generic type for POIs
+  const placesUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=5000&keyword=${encodeURIComponent(searchTerm)}&type=point_of_interest&key=${apiKey}`;
   const placesResponse = await fetch(placesUrl);
   
   if (!placesResponse.ok) {
@@ -146,19 +152,19 @@ function estimateCostForPlace(place: any, originalBudget: number): number {
   const placeTypes = place.types || [];
   
   if (placeTypes.includes('museum') || placeTypes.includes('art_gallery')) {
-    return Math.round(originalBudget * 0.7); // Museums are usually cheaper
+    return Math.round(originalBudget * 0.7); 
   }
   
   if (placeTypes.includes('shopping_mall') || placeTypes.includes('store')) {
-    return Math.round(originalBudget * 1.2); // Shopping can be more expensive
+    return Math.round(originalBudget * 1.2); 
   }
   
   if (placeTypes.includes('movie_theater') || placeTypes.includes('amusement_park')) {
-    return Math.round(originalBudget * 0.8); // Entertainment venues
+    return Math.round(originalBudget * 0.8); 
   }
   
   if (placeTypes.includes('restaurant') || placeTypes.includes('food')) {
-    return Math.round(originalBudget * 0.9); // Food places
+    return Math.round(originalBudget * 0.9); 
   }
   
   // Default to original budget with some variation

@@ -27,9 +27,11 @@ export async function POST(request: NextRequest) {
     // Google Places Nearby Search API
     const placesUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius || 1000}&type=${type || 'lodging'}&key=${apiKey}`;
     
-    //console.log('Fetching places from:', placesUrl.replace(apiKey, 'API_KEY_HIDDEN'));
+    
     
     const response = await fetch(placesUrl);
+
+    console.log('Google places nearby search result:', response.json());
     
     if (!response.ok) {
       throw new Error(`Places API error: ${response.status}`);

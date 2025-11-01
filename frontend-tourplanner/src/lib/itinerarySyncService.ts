@@ -197,6 +197,32 @@ class ItinerarySyncService {
         }
     }
 
+    // Get a single booking by ID with its associated itinerary
+    async getBookingById(bookingId: string | number): Promise<any> {
+        try {
+            const response = await fetch(`${this.baseUrl}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'getBookingById',
+                    bookingId: bookingId
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const result = await response.json();
+            return result;
+        } catch (error) {
+            console.error('Error getting booking by ID from PostgreSQL:', error);
+            throw error;
+        }
+    }
+
     // Update booking status (e.g., cancel booking)
     async updateBookingStatus(bookingId: number, status: string, payment_status?: string): Promise<SyncResponse> {
         console.log("payment status received in Itenerary in frontend is:", payment_status);

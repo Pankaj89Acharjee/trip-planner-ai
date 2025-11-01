@@ -6,64 +6,14 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapIcon, Navigation, Target, Edit3 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function MapPage() {
-  // Sample data for demonstration
-  const sampleDestination = "Delhi";
-  const sampleInterests = ["heritage", "food", "culture"];
-  const sampleBudget = 15000;
-  const sampleItinerary = [
-    {
-      day: 1,
-      accommodation: {
-        name: "The Leela Palace",
-        description: "Luxury hotel in Delhi",
-        costPerNight: 15000,
-        location: { latitude: 28.6139, longitude: 77.2090 }
-      },
-      activities: [
-        {
-          name: "Red Fort",
-          description: "Historic fort in Old Delhi",
-          cost: 500,
-          duration: 3,
-          location: { latitude: 28.6562, longitude: 77.2410 }
-        },
-        {
-          name: "Chandni Chowk",
-          description: "Famous market area",
-          cost: 200,
-          duration: 2,
-          location: { latitude: 28.6562, longitude: 77.2307 }
-        }
-      ]
-    },
-    {
-      day: 2,
-      accommodation: {
-        name: "The Leela Palace",
-        description: "Luxury hotel in Delhi",
-        costPerNight: 15000,
-        location: { latitude: 28.6139, longitude: 77.2090 }
-      },
-      activities: [
-        {
-          name: "India Gate",
-          description: "War memorial monument",
-          cost: 0,
-          duration: 1,
-          location: { latitude: 28.6129, longitude: 77.2295 }
-        },
-        {
-          name: "Lotus Temple",
-          description: "Bahá'í House of Worship",
-          cost: 0,
-          duration: 2,
-          location: { latitude: 28.5535, longitude: 77.2588 }
-        }
-      ]
-    }
-  ];
+  const auth = useAuth();
+  // Defaults for initial preview; real selections will override via UI
+  const defaultDestination = "Delhi";
+  const defaultInterests = ["heritage", "food", "culture"];
+  const defaultBudget = 15000;
 
   return (
     <ProtectedRoute>
@@ -72,7 +22,7 @@ export default function MapPage() {
           <div className="mb-8">
             <h1 className="text-4xl font-bold tracking-tight text-primary sm:text-5xl flex items-center gap-3">
               <MapIcon className="w-10 h-10" />
-              Interactive Maps
+              Interactive Planning with Maps
             </h1>
             <p className="mt-4 text-lg leading-8 text-muted-foreground">
               Explore destinations, visualize your trip route, and plan interactively with our comprehensive map features.
@@ -142,23 +92,19 @@ export default function MapPage() {
           {/* Interactive Map Demo */}
           <Card>
             <CardHeader>
-              <CardTitle>Interactive Map Demo</CardTitle>
+              <CardTitle>Customize your trip with our interactive map</CardTitle>
               <CardDescription>
                 Try out all three map features with sample data from Delhi
               </CardDescription>
             </CardHeader>
             <CardContent>
               <MapView 
-                destination={sampleDestination}
-                interests={sampleInterests}
-                budget={sampleBudget}
-                userUid="demo-user"
-                itinerary={sampleItinerary}
+                destination={defaultDestination}
+                interests={defaultInterests}
+                budget={defaultBudget}
+                userUid={auth.user?.uid || 'guest'}
                 onLocationSelect={(location) => {
                   console.log('Location selected:', location);
-                }}
-                onItineraryUpdate={(updatedItinerary) => {
-                  console.log('Itinerary updated:', updatedItinerary);
                 }}
               />
             </CardContent>

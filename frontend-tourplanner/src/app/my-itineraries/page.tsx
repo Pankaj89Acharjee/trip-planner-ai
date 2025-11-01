@@ -10,7 +10,8 @@ import { LayoutWrapper } from '@/components/layout-wrapper';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { Calendar, MapPin, Users, BookOpen, Trash2, Star, IndianRupee } from 'lucide-react';
+import { Calendar, MapPin, Users, BookOpen, Trash2, Star, IndianRupee, Eye } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 export default function MyItinerariesPage() {
   const [itineraries, setItineraries] = useState<SavedItinerary[]>([]);
@@ -19,6 +20,7 @@ export default function MyItinerariesPage() {
 
   const { userData, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
     // Only load itineraries when userData is available and auth is not loading
@@ -29,19 +31,37 @@ export default function MyItinerariesPage() {
 
   // Transforming data for frontend display compatible
   const transformItineraryData = (dbData: any[]): SavedItinerary[] => {
-    return dbData.map(item => ({
-      id: item.id,
-      userUid: item.user_uid,
-      title: item.title,
-      destination: item.destination,
-      itinerary: item.itinerary_data || { itinerary: [], totalCost: 0, metadata: { searchResults: {}, recommendations: {} } },
-      status: item.status,
-      isFavorite: item.is_favorite,
-      travelDates: item.travel_dates,
-      participants: item.participants,
-      createdAt: item.created_at,
-      updatedAt: item.updated_at
-    }));
+    return dbData.map(item => {
+      const rawData = item.itinerary_data;
+      // Normalize itinerary shape: support {days: [...]}, or {itinerary: [...]}
+      const days = rawData?.days || rawData?.itinerary || [];
+      const totalCost = typeof rawData?.totalCost === 'number' ? rawData.totalCost : 0;
+
+      // Normalize travel dates: string "YYYY-MM-DD - YYYY-MM-DD" or object
+      let travelDates: any = undefined;
+      if (item.travel_dates) {
+        if (typeof item.travel_dates === 'string' && item.travel_dates.includes(' - ')) {
+          const [start, end] = item.travel_dates.split(' - ');
+          travelDates = { startDate: start, endDate: end };
+        } else if (typeof item.travel_dates === 'object') {
+          travelDates = item.travel_dates;
+        }
+      }
+
+      return {
+        id: item.id,
+        userUid: item.user_uid,
+        title: item.title,
+        destination: item.destination,
+        itinerary: { itinerary: days, totalCost, metadata: rawData?.metadata || { searchResults: {}, recommendations: {} } },
+        status: item.status,
+        isFavorite: item.is_favorite,
+        travelDates,
+        participants: item.participants || 1,
+        createdAt: item.created_at,
+        updatedAt: item.updated_at
+      } as SavedItinerary;
+    });
   };
 
   const loadItineraries = async () => {
@@ -320,11 +340,11 @@ export default function MyItinerariesPage() {
 
                       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                         <IndianRupee className="h-4 w-4" />
-                        <span className="font-medium">{itinerary.itinerary.totalCost.toLocaleString()} /-</span>
+                        <span className="font-medium">{(itinerary.itinerary?.totalCost || 0).toLocaleString()} /-</span>
                       </div>
 
                       <div className="text-sm text-gray-600 dark:text-gray-400">
-                        <span>{itinerary.itinerary.itinerary.length} day{itinerary.itinerary.itinerary.length > 1 ? 's' : ''} itinerary</span>
+                        <span>{(itinerary.itinerary?.itinerary?.length || 0)} day{(itinerary.itinerary?.itinerary?.length || 0) > 1 ? 's' : ''} itinerary</span>
                       </div>
                     </div>
 
@@ -339,21 +359,31 @@ export default function MyItinerariesPage() {
                         </Button>
                       )}
 
-                   
                       {itinerary.status === 'booked' && (
-                        <div className="flex-1 p-2 bg-green-100 text-green-800 rounded text-center text-sm font-medium">
-                          ✅ Booked
-                        </div>
+                        <>
+                          <div className="flex-1 p-2 bg-green-100 text-green-800 rounded text-center text-sm font-medium">
+                            ✅ Booked & Paid
+                          </div>
+                          <Button
+                            onClick={() => router.push(`/booking-details/${itinerary.id}`)}
+                            className="bg-blue-600 hover:bg-blue-700"
+                          >
+                            <Eye className="mr-2 h-4 w-4" />
+                            View Booking
+                          </Button>
+                        </>
                       )}
 
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => itinerary.id && handleDelete(itinerary.id)}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {(itinerary.status === 'saved' || itinerary.status === 'draft') && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => itinerary.id && handleDelete(itinerary.id)}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

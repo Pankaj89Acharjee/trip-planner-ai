@@ -85,7 +85,7 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormVal
 
       const result = await askAgent(question);
 
-      console.log("Receive Itenery from Agent", result.answer)
+      //console.log("Receive Itenery from Agent", result.answer)
 
       //Removing markdown if any at the beginning
       let jsonString = result.answer;
@@ -352,23 +352,7 @@ export function ItineraryForm({ setItinerary, setIsLoading, setError, setFormVal
               </form>
             </Form>
           </CardContent>
-        </Card>
-
-        {/* Map Section */}
-        <div className="space-y-4">
-          <MapView
-            destination={form.watch("destination")}
-            interests={form.watch("interests") || []}
-            budget={form.watch("budget") || 0}
-            userUid={userData?.uid}
-            onLocationSelect={(location) => {
-              console.log('Location selected:', location);
-            }}
-            onItineraryUpdate={(updatedItinerary) => {
-              console.log('Itinerary updated:', updatedItinerary);
-            }}
-          />
-        </div>
+        </Card>       
       </div>
     </div>
   );

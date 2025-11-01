@@ -97,6 +97,7 @@ Live weather API integration.
 
 Group travel planning (multiple users in same trip).
 
-Smart reminders & push notifications.
+Smart reminders & push notifications with Agents after the Booking is confirmed.
 
 Integration with WhatsApp for trip updates.
+

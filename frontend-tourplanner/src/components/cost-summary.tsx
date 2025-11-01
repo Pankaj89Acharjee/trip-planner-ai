@@ -11,17 +11,19 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import type { ItineraryDay } from "@/lib/interfaces";
-import { Button } from "./ui/button";
-import { Share2, BedDouble, Plane, Sparkles } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { BedDouble, Plane, Sparkles } from "lucide-react";
+import { ItineraryShareExport } from "./itinerary-share-export";
+import type { ItineraryData } from "@/lib/itineraryExport";
 
 type CostSummaryProps = {
   totalCost: number;
   itinerary: ItineraryDay[];
+  destination?: string;
+  budget?: number;
+  startDate?: string;
 };
 
-export function CostSummary({ totalCost, itinerary }: CostSummaryProps) {
-  const { toast } = useToast();
+export function CostSummary({ totalCost, itinerary, destination, budget, startDate }: CostSummaryProps) {
 
   const costBreakdown = useMemo(() => {
     let accommodation = 0;
@@ -43,19 +45,31 @@ export function CostSummary({ totalCost, itinerary }: CostSummaryProps) {
     return { accommodation, transportation, activities };
   }, [itinerary]);
 
-  const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href);
-    toast({
-      title: "Link Copied!",
-      description: "Your itinerary link has been copied to the clipboard.",
-    });
-  };
-
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Cost Breakdown</CardTitle>
-        <CardDescription>Estimated costs for your trip.</CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>Cost Breakdown</CardTitle>
+            <CardDescription>Estimated costs for your trip.</CardDescription>
+          </div>
+          <ItineraryShareExport 
+            itineraryData={{
+              destination: destination || 'Trip',
+              totalDays: itinerary.length,
+              totalCost: totalCost,
+              budget: budget,
+              itinerary: itinerary,
+              travelDates: startDate ? {
+                startDate: startDate,
+                endDate: new Date(new Date(startDate).getTime() + itinerary.length * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+              } : undefined
+            }}
+            variant="outline"
+            size="sm"
+            showLabel={false}
+          />
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex justify-between items-baseline">
@@ -86,11 +100,6 @@ export function CostSummary({ totalCost, itinerary }: CostSummaryProps) {
           </div>
         </div>
       </CardContent>
-      <CardFooter>
-        <Button className="w-full bg-purple-700/90 text-white" variant="outline" onClick={handleShare}>
-          <Share2 className="mr-2 h-4 w-4  text-white" /> Share Itinerary
-        </Button>
-      </CardFooter>
     </Card>
   );
 }

@@ -269,6 +269,24 @@ tools:
       WHERE b.user_uid = $1
       ORDER BY b.created_at DESC;
 
+  get-booking-by-id:
+    kind: postgres-sql
+    source: my-cloud-sql-source
+    description: Get a single booking by ID with its associated itinerary details
+    parameters:
+      - name: booking_id
+        type: integer
+        description: The booking ID to retrieve
+    statement: |
+      SELECT 
+        json_build_object(
+          'booking', row_to_json(b.*),
+          'itinerary', row_to_json(i.*)
+        ) as result
+      FROM hachathonschema.bookings b
+      LEFT JOIN hachathonschema.user_itineraries i ON b.itinerary_id = i.id
+      WHERE b.id = $1;
+
   # =====================================================
   # USER TOOLS
   # =====================================================
@@ -361,6 +379,7 @@ toolsets:
     - get-user-itineraries
     - update-itinerary-status
     - get-user-bookings
+    - get-booking-by-id
     - create-booking
     - update-booking-status
     - create-user
