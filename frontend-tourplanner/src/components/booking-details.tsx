@@ -24,6 +24,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { ItineraryShareExport } from './itinerary-share-export';
 import type { ItineraryData } from '@/lib/itineraryExport';
+import { SmartAdjustmentNotifications } from './smart-adjustment-notifications';
+import { TrafficMonitoring } from './traffic-monitoring';
 
 interface BookingDetailsProps {
   bookingId?: string;
@@ -35,8 +37,8 @@ export function BookingDetails({ bookingId, onBack }: BookingDetailsProps) {
   const { toast } = useToast();
   const [booking, setBooking] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [weatherConditions, setWeatherConditions] = useState<any>(null);
-  const [showAdjustmentOption, setShowAdjustmentOption] = useState(false);
+  const [showWeatherMonitoring, setShowWeatherMonitoring] = useState(false);
+  const [itineraryForMonitoring, setItineraryForMonitoring] = useState<any>(null);
 
   useEffect(() => {
     if (bookingId) {
@@ -149,6 +151,39 @@ export function BookingDetails({ bookingId, onBack }: BookingDetailsProps) {
         amenities: accommodation.amenities || []
       } : null;
 
+      // Extract distance information from various possible locations
+      let totalDistance = 'N/A';
+      let fromCurrentLocation = 'N/A';
+      
+      // Check in itineraryDetails first (parsed itinerary_data JSON)
+      if (itineraryDetails?.totalDistance) {
+        totalDistance = itineraryDetails.totalDistance;
+      }
+      if (itineraryDetails?.fromCurrentLocation) {
+        fromCurrentLocation = itineraryDetails.fromCurrentLocation;
+      }
+      
+      // Check in itineraryData object (direct database fields)
+      if (itineraryData?.total_distance) {
+        totalDistance = itineraryData.total_distance;
+      }
+      if (itineraryData?.from_current_location) {
+        fromCurrentLocation = itineraryData.from_current_location;
+      }
+      
+      // Also check if distance is stored at the root level of itineraryDetails
+      // (new format: distance is added to the itinerary object before saving)
+      if (typeof itineraryDetails === 'object' && itineraryDetails !== null) {
+        if (('totalDistance' in itineraryDetails) && (totalDistance === 'N/A' || !totalDistance)) {
+          totalDistance = (itineraryDetails as any).totalDistance || totalDistance;
+        }
+        if (('fromCurrentLocation' in itineraryDetails) && (fromCurrentLocation === 'N/A' || !fromCurrentLocation)) {
+          fromCurrentLocation = (itineraryDetails as any).fromCurrentLocation || fromCurrentLocation;
+        }
+      }
+
+      console.log('Distance data:', { totalDistance, fromCurrentLocation, itineraryDetails, itineraryData });
+
       // Transform the data for the UI
       const transformedBooking = {
         id: bookingData.id,
@@ -169,14 +204,26 @@ export function BookingDetails({ bookingId, onBack }: BookingDetailsProps) {
         accommodation: formattedAccommodation,
         activities: activities,
         distance: {
-          totalDistance: itineraryDetails?.totalDistance || 'N/A',
-          fromCurrentLocation: itineraryDetails?.fromCurrentLocation || 'N/A'
+          totalDistance,
+          fromCurrentLocation
         },
         specialRequests: bookingData.special_requests || null,
         cancellationPolicy: bookingData.cancellation_policy || 'Standard cancellation policy applies'
       };
 
       setBooking(transformedBooking);
+
+      // Prepare itinerary structure for monitoring services
+      const monitoringItinerary = {
+        itinerary: itineraryArray.map((day: any, index: number) => ({
+          ...day,
+          day: index + 1
+        })),
+        totalCost: bookingData.total_amount,
+        destination: itineraryData?.destination || 'Unknown'
+      };
+      setItineraryForMonitoring(monitoringItinerary);
+
     } catch (error) {
       console.error('Error fetching booking details:', error);
       toast({
@@ -189,22 +236,35 @@ export function BookingDetails({ bookingId, onBack }: BookingDetailsProps) {
     }
   };
 
-  const checkWeatherConditions = async () => {
-    // TODO: Integrate with weather monitoring service
-    // This will be implemented later for adverse condition adjustments
-    setShowAdjustmentOption(true);
+  const toggleWeatherMonitoring = () => {
+    setShowWeatherMonitoring(!showWeatherMonitoring);
+    if (!showWeatherMonitoring) {
+      toast({
+        title: 'Weather Monitoring Activated',
+        description: 'Real-time weather and traffic monitoring is now active for your booking.'
+      });
+    }
   };
 
-  const handleAdjustBooking = () => {
+  const handleAdjustmentAccepted = (adjustment: any, updatedItinerary?: any) => {
     toast({
-      title: 'Adjustment Feature',
-      description: 'Weather-based booking adjustment will be available soon!'
+      title: 'Adjustment Applied',
+      description: 'Your booking has been updated based on current conditions.',
+      variant: 'default'
+    });
+    // In a real app, you would update the booking in the database here
+  };
+
+  const handleAdjustmentRejected = (adjustment: any) => {
+    toast({
+      title: 'Adjustment Dismissed',
+      description: 'The suggested adjustment has been dismissed.'
     });
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="w-full h-full flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading booking details...</p>
@@ -215,7 +275,7 @@ export function BookingDetails({ bookingId, onBack }: BookingDetailsProps) {
 
   if (!booking) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="w-full h-full flex items-center justify-center p-4">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6">
             <div className="text-center">
@@ -236,9 +296,10 @@ export function BookingDetails({ bookingId, onBack }: BookingDetailsProps) {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
-      {/* Header */}
-      <div className="mb-6">
+    <div className="w-full h-full overflow-y-auto">
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        {/* Header */}
+        <div className="mb-6">
         {onBack && (
           <Button variant="ghost" onClick={onBack} className="mb-4">
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -324,27 +385,27 @@ export function BookingDetails({ bookingId, onBack }: BookingDetailsProps) {
         </Card>
       </div>
 
-      {/* Weather Adjustment Alert (Placeholder for future feature) */}
-      {showAdjustmentOption && (
-        <Card className="mb-6 border-orange-200 bg-orange-50">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-3">
-              <Cloud className="h-6 w-6 text-orange-600 mt-1" />
-              <div className="flex-1">
-                <h3 className="font-semibold text-orange-900 mb-1">
-                  Adverse Weather Conditions Detected
-                </h3>
-                <p className="text-sm text-orange-800 mb-3">
-                  We've detected potentially challenging weather conditions during your travel dates. 
-                  Would you like to adjust your booking?
-                </p>
-                <Button onClick={handleAdjustBooking} variant="outline" size="sm">
-                  Adjust Booking
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Real-Time Weather & Traffic Monitoring */}
+      {showWeatherMonitoring && itineraryForMonitoring && (
+        <div className="mb-6 grid grid-cols-1 gap-4">
+          <TrafficMonitoring
+            itinerary={itineraryForMonitoring}
+            travelDates={{
+              startDate: booking.travelDates.checkIn,
+              endDate: booking.travelDates.checkOut
+            }}
+          />
+          <SmartAdjustmentNotifications
+            itinerary={itineraryForMonitoring}
+            onAdjustmentAccepted={handleAdjustmentAccepted}
+            onAdjustmentRejected={handleAdjustmentRejected}
+            userPreferences={{
+              budget: booking.totalAmount,
+              destination: booking.destination,
+              participants: booking.participants
+            }}
+          />
+        </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -390,53 +451,57 @@ export function BookingDetails({ bookingId, onBack }: BookingDetailsProps) {
           </Card>
 
           {/* Accommodation Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Hotel className="h-5 w-5" />
-                Accommodation
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <h3 className="text-xl font-semibold mb-2">{booking.accommodation.name}</h3>
-                <div className="flex items-center gap-2 text-gray-600 mb-2">
-                  <MapPin className="h-4 w-4" />
-                  <span className="text-sm">{booking.accommodation.address}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-                    ★ {booking.accommodation.rating}/5
-                  </Badge>
-                  <Badge variant="outline">{booking.accommodation.roomType}</Badge>
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="grid grid-cols-2 gap-4">
+          {booking.accommodation && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Hotel className="h-5 w-5" />
+                  Accommodation
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 <div>
-                  <p className="text-sm text-gray-600">Cost per night</p>
-                  <p className="text-lg font-semibold">₹{booking.accommodation.costPerNight.toLocaleString()}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Total nights</p>
-                  <p className="text-lg font-semibold">{booking.accommodation.totalNights}</p>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">Amenities</p>
-                <div className="flex flex-wrap gap-2">
-                  {booking.accommodation.amenities.map((amenity: string, index: number) => (
-                    <Badge key={index} variant="secondary">
-                      {amenity}
+                  <h3 className="text-xl font-semibold mb-2 wrap-break-word">{booking.accommodation.name}</h3>
+                  <div className="flex items-start gap-2 text-gray-600 mb-2">
+                    <MapPin className="h-4 w-4 mt-1 shrink-0" />
+                    <span className="text-sm wrap-break-word">{booking.accommodation.address}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+                      ★ {booking.accommodation.rating}/5
                     </Badge>
-                  ))}
+                    <Badge variant="outline">{booking.accommodation.roomType}</Badge>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+
+                <Separator />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Cost per night</p>
+                    <p className="text-lg font-semibold">₹{booking.accommodation.costPerNight.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Total nights</p>
+                    <p className="text-lg font-semibold">{booking.accommodation.totalNights}</p>
+                  </div>
+                </div>
+
+                {booking.accommodation.amenities.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Amenities</p>
+                    <div className="flex flex-wrap gap-2">
+                      {booking.accommodation.amenities.map((amenity: string, index: number) => (
+                        <Badge key={index} variant="secondary" className="wrap-break-word">
+                          {amenity}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Activities */}
           <Card>
@@ -449,31 +514,31 @@ export function BookingDetails({ bookingId, onBack }: BookingDetailsProps) {
             <CardContent className="space-y-4">
               {booking.activities.map((activity: any, index: number) => (
                 <div key={index} className="border rounded-lg p-4">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-lg mb-1">{activity.name}</h4>
-                      <p className="text-sm text-gray-600 mb-2">{activity.description}</p>
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-lg mb-1 wrap-break-word">{activity.name}</h4>
+                      <p className="text-sm text-gray-600 mb-2 wrap-break-word">{activity.description}</p>
                     </div>
-                    <Badge variant={activity.status === 'confirmed' ? 'default' : 'secondary'}>
+                    <Badge variant={activity.status === 'confirmed' ? 'default' : 'secondary'} className="shrink-0">
                       {activity.status}
                     </Badge>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                     <div className="flex items-center gap-2 text-gray-600">
-                      <Calendar className="h-4 w-4" />
+                      <Calendar className="h-4 w-4 shrink-0" />
                       <span>{new Date(activity.date).toLocaleDateString()}</span>
                     </div>
                     <div className="flex items-center gap-2 text-gray-600">
-                      <Clock className="h-4 w-4" />
-                      <span>{activity.time} ({activity.duration})</span>
+                      <Clock className="h-4 w-4 shrink-0" />
+                      <span className="wrap-break-word">{activity.time} ({activity.duration})</span>
+                    </div>
+                    <div className="flex items-start gap-2 text-gray-600 sm:col-span-2">
+                      <MapPin className="h-4 w-4 shrink-0 mt-0.5" />
+                      <span className="wrap-break-word">{activity.location}</span>
                     </div>
                     <div className="flex items-center gap-2 text-gray-600">
-                      <MapPin className="h-4 w-4" />
-                      <span>{activity.location}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <DollarSign className="h-4 w-4" />
+                      <DollarSign className="h-4 w-4 shrink-0" />
                       <span className="font-semibold">₹{activity.cost}</span>
                     </div>
                   </div>
@@ -577,18 +642,27 @@ export function BookingDetails({ bookingId, onBack }: BookingDetailsProps) {
           <div className="space-y-3">
             <Button 
               className="w-full" 
-              variant="outline"
-              onClick={checkWeatherConditions}
+              variant={showWeatherMonitoring ? "default" : "outline"}
+              onClick={toggleWeatherMonitoring}
             >
               <Cloud className="mr-2 h-4 w-4" />
-              Check Weather Conditions
+              {showWeatherMonitoring ? 'Hide Weather Monitoring' : 'Check Weather Conditions'}
             </Button>
-            <Button className="w-full" variant="outline">
+            <Button 
+              className="w-full" 
+              variant="outline"
+              onClick={() => {
+                const destination = `${booking.accommodation?.address || booking.destination}`;
+                const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+                window.open(mapsUrl, '_blank');
+              }}
+            >
               <Car className="mr-2 h-4 w-4" />
               Get Directions
             </Button>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

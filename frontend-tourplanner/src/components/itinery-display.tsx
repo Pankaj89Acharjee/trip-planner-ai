@@ -128,16 +128,31 @@ export function ItineraryDisplay({
 
     setIsSaving(true);
     try {
+      // Calculate distances before saving
+      const { calculateTotalItineraryDistance, calculateDistanceFromUserLocation } = await import('@/lib/distanceCalculator');
+      
+      const totalDistance = calculateTotalItineraryDistance(currentItinerary.itinerary || []);
+      const fromCurrentLocation = await calculateDistanceFromUserLocation(formValues.destination || '');
+
+      console.log('Calculated distances:', { totalDistance, fromCurrentLocation });
+
       // Calculate end date from start date and duration
       const startDate = formValues.startDate || new Date().toISOString().split('T')[0];
       const duration = formValues.travelDuration || 1;
       const endDate = new Date(new Date(startDate).getTime() + duration * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
+      // Add distance information to the itinerary
+      const itineraryWithDistance = {
+        ...currentItinerary,
+        totalDistance,
+        fromCurrentLocation
+      };
+
       const itineraryData = {
         userUid: userData.uid,
         title: `${formValues.destination || 'Generated'} Trip Package`,
         destination: formValues.destination || 'Generated Destination',
-        itinerary: currentItinerary,
+        itinerary: itineraryWithDistance,
         status: 'saved' as const,
         participants: formValues.participants || 1,
         isFavorite: formValues.isFavorite || false,

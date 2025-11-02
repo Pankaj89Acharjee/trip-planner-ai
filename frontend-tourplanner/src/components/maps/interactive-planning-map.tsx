@@ -533,6 +533,12 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate, destinati
       const tripTitle = destination ? `Booking Trip to ${destination}` : 'My Trip';
       const tripDestination = destination || 'Unknown';
 
+      // Calculate distances
+      const { calculateTotalItineraryDistance, calculateDistanceFromUserLocation } = await import('@/lib/distanceCalculator');
+      const totalDistance = calculateTotalItineraryDistance(updatedItinerary);
+      const fromCurrentLocation = await calculateDistanceFromUserLocation(tripDestination);
+
+      console.log('Calculated distances:', { totalDistance, fromCurrentLocation });
       
       const today = new Date();
       const startDate = today.toISOString().split('T')[0];
@@ -551,7 +557,7 @@ export function InteractivePlanningMap({ itinerary, onItineraryUpdate, destinati
         effectiveUid,
         tripTitle,
         tripDestination,
-        { days: updatedItinerary, totalCost },
+        { days: updatedItinerary, totalCost, totalDistance, fromCurrentLocation },
         { status: 'saved', totalDays: updatedItinerary.length, travelDates: { startDate, endDate } }
       );
 
